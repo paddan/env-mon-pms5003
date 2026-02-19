@@ -30,11 +30,13 @@ const GRID_COLOR: DisplayColor = DisplayColor::new(8, 16, 8);
 const TEXT_WHITE: DisplayColor = DisplayColor::new(31, 63, 31);
 const TEXT_DIM: DisplayColor = DisplayColor::new(20, 38, 20);
 const NEON_GREEN: DisplayColor = DisplayColor::new(0, 63, 12);
+const LIME: DisplayColor = DisplayColor::new(12, 63, 0);
 const BLUE: DisplayColor = DisplayColor::new(10, 34, 31);
 const GREEN: DisplayColor = DisplayColor::new(0, 54, 8);
 const YELLOW: DisplayColor = DisplayColor::new(31, 58, 0);
 const ORANGE: DisplayColor = DisplayColor::new(31, 34, 0);
 const RED: DisplayColor = DisplayColor::new(31, 4, 4);
+const DEEP_RED: DisplayColor = DisplayColor::new(23, 0, 0);
 
 // Fonts
 #[allow(dead_code)]
@@ -266,6 +268,12 @@ const STATUS_TEXT_GAP_Y: i32 = 20;
 const STATUS_TEXT_CLEAR_PAD_X: i32 = 4;
 const STATUS_TEXT_CLEAR_PAD_Y: i32 = 2;
 const STATUS_TEXT_MAX_CHARS: i32 = 16;
+const EU_PM25_GOOD_MAX: u16 = 5;
+const EU_PM25_FAIR_MAX: u16 = 15;
+const EU_PM25_MODERATE_MAX: u16 = 50;
+const EU_PM25_POOR_MAX: u16 = 90;
+const EU_PM25_VERY_POOR_MAX: u16 = 140;
+const PM25_SCALE_MAX_UGM3: u16 = 180;
 const GAUGE_ARROW_LEN_BASE: i32 = 11;
 const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
 const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
@@ -278,22 +286,30 @@ struct GaugeSegmentCfg {
     color: DisplayColor,
 }
 
-const GAUGE_SEGMENTS: [GaugeSegmentCfg; 4] = [
+const GAUGE_SEGMENTS: [GaugeSegmentCfg; 6] = [
     GaugeSegmentCfg {
-        sweep_deg: 60.0,
+        sweep_deg: 5.0,
         color: GREEN,
     },
     GaugeSegmentCfg {
-        sweep_deg: 45.0,
+        sweep_deg: 10.0,
+        color: LIME,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 35.0,
         color: YELLOW,
     },
     GaugeSegmentCfg {
-        sweep_deg: 45.0,
+        sweep_deg: 40.0,
         color: ORANGE,
     },
     GaugeSegmentCfg {
-        sweep_deg: 30.0,
+        sweep_deg: 50.0,
         color: RED,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 40.0,
+        color: DEEP_RED,
     },
 ];
 // ===== End appearance config =====
@@ -310,7 +326,7 @@ pub struct DisplayCache {
     pm10: String<8>,
     pm03: String<8>,
     pm05: String<8>,
-    status_index: Option<u16>,
+    status_pm25: Option<u16>,
 }
 
 impl DisplayCache {
@@ -327,7 +343,7 @@ impl DisplayCache {
             pm10: String::new(),
             pm03: String::new(),
             pm05: String::new(),
-            status_index: None,
+            status_pm25: None,
         }
     }
 }
@@ -439,7 +455,7 @@ fn draw_dynamic<D>(
     let mut pm10_text: String<8> = String::new();
     let mut pm03_text: String<8> = String::new();
     let mut pm05_text: String<8> = String::new();
-    let mut status_index = None;
+    let mut status_pm25 = None;
 
     if let Some(reading) = pms {
         let _ = write!(pm25_text, "{}", reading.pm2_5_atm);
@@ -448,7 +464,7 @@ fn draw_dynamic<D>(
         let _ = write!(pm03_text, "{}", reading.particles_0_3um);
         let _ = write!(pm05_text, "{}", reading.particles_0_5um);
 
-        status_index = Some(air_quality_index_from_pm25(reading.pm2_5_atm));
+        status_pm25 = Some(reading.pm2_5_atm);
     } else {
         let _ = pm25_text.push_str("---");
         let _ = pm1_text.push_str("---");
@@ -483,8 +499,8 @@ fn draw_dynamic<D>(
         pressure_text.as_str(),
         field_pressure,
     );
-    let status_text = air_quality_level_text(status_index);
-    update_status_if_changed(display, cache, status_text, status_index);
+    let status_text = air_quality_level_text(status_pm25);
+    update_status_if_changed(display, cache, status_text, status_pm25);
 
     update_field_if_changed(display, &mut cache.pm1, pm1_text.as_str(), FIELD_PM1);
     update_field_if_changed(display, &mut cache.pm25, pm25_text.as_str(), FIELD_PM25);
@@ -531,16 +547,16 @@ fn update_status_if_changed<D>(
     display: &mut D,
     cache: &mut DisplayCache,
     text: &str,
-    value: Option<u16>,
+    pm25: Option<u16>,
 ) where
     D: DrawTarget<Color = DisplayColor>,
 {
-    if cache.status_text.as_str() == text && cache.status_index == value {
+    if cache.status_text.as_str() == text && cache.status_pm25 == pm25 {
         return;
     }
 
-    if let Some(prev) = cache.status_index {
-        let ratio = status_ratio(prev);
+    if let Some(prev_pm25) = cache.status_pm25 {
+        let ratio = status_ratio(prev_pm25);
         let angle = gauge_angle(ratio);
         erase_status_needle(display, angle);
         restore_gauge_slice(display, angle);
@@ -548,7 +564,7 @@ fn update_status_if_changed<D>(
 
     let value_style = TextStyleCfg {
         font: STYLE_STATUS_TEXT.font,
-        color: value.map(status_color).unwrap_or(TEXT_DIM),
+        color: pm25.map(status_color).unwrap_or(TEXT_DIM),
     };
     let font = font_for(value_style.font);
     clear_rect(display, status_text_clear_rect(font));
@@ -556,15 +572,15 @@ fn update_status_if_changed<D>(
     let text_pos = centered_status_text_pos(font, text);
     draw_text_aa(display, text_pos, font, value_style.color, text);
 
-    if let Some(index) = value {
-        let ratio = status_ratio(index);
+    if let Some(current_pm25) = pm25 {
+        let ratio = status_ratio(current_pm25);
         let angle = gauge_angle(ratio);
         draw_status_needle(display, angle);
     }
 
     cache.status_text.clear();
     let _ = cache.status_text.push_str(text);
-    cache.status_index = value;
+    cache.status_pm25 = pm25;
 }
 
 fn draw_arc_band<D>(display: &mut D, start_deg: f32, sweep_deg: f32, color: DisplayColor)
@@ -712,8 +728,8 @@ where
     .draw(display);
 }
 
-fn status_ratio(index: u16) -> f32 {
-    index.min(300) as f32 / 300.0
+fn status_ratio(pm25: u16) -> f32 {
+    pm25.min(PM25_SCALE_MAX_UGM3) as f32 / PM25_SCALE_MAX_UGM3 as f32
 }
 
 fn gauge_angle(ratio: f32) -> f32 {
@@ -1386,44 +1402,30 @@ fn brighten(color: DisplayColor, amount: u8) -> DisplayColor {
     )
 }
 
-fn status_color(index: u16) -> DisplayColor {
-    match index {
-        0..=50 => GREEN,
-        51..=100 => YELLOW,
-        101..=150 => ORANGE,
-        _ => RED,
+fn status_color(pm25: u16) -> DisplayColor {
+    if pm25 <= EU_PM25_GOOD_MAX {
+        GREEN
+    } else if pm25 <= EU_PM25_FAIR_MAX {
+        LIME
+    } else if pm25 <= EU_PM25_MODERATE_MAX {
+        YELLOW
+    } else if pm25 <= EU_PM25_POOR_MAX {
+        ORANGE
+    } else if pm25 <= EU_PM25_VERY_POOR_MAX {
+        RED
+    } else {
+        DEEP_RED
     }
 }
 
-fn air_quality_level_text(index: Option<u16>) -> &'static str {
-    match index {
-        Some(0..=50) => "BRA NIVÅ",
-        Some(51..=100) => "OK NIVÅ",
-        Some(101..=150) => "SÄMRE NIVÅ",
-        Some(151..=200) => "DÅLIG NIVÅ",
-        Some(201..=300) => "USEL NIVÅ",
-        Some(_) => "FARLIG NIVÅ!",
+fn air_quality_level_text(pm25: Option<u16>) -> &'static str {
+    match pm25 {
+        Some(v) if v <= EU_PM25_GOOD_MAX => "BRA NIVÅ",
+        Some(v) if v <= EU_PM25_FAIR_MAX => "GODTAGBAR",
+        Some(v) if v <= EU_PM25_MODERATE_MAX => "MÅTTLIG",
+        Some(v) if v <= EU_PM25_POOR_MAX => "DÅLIG",
+        Some(v) if v <= EU_PM25_VERY_POOR_MAX => "MYCKET DÅLIG",
+        Some(_) => "EXTREMT DÅLIG",
         None => "INGEN DATA",
     }
-}
-
-fn air_quality_index_from_pm25(pm25: u16) -> u16 {
-    let c = pm25 as u32;
-
-    let (cl, ch, il, ih) = if c <= 12 {
-        (0, 12, 0, 50)
-    } else if c <= 35 {
-        (13, 35, 51, 100)
-    } else if c <= 55 {
-        (36, 55, 101, 150)
-    } else if c <= 150 {
-        (56, 150, 151, 200)
-    } else if c <= 250 {
-        (151, 250, 201, 300)
-    } else {
-        (251, 500, 301, 500)
-    };
-
-    let index = ((ih - il) * (c.saturating_sub(cl)) / (ch - cl)) + il;
-    index.min(500) as u16
 }

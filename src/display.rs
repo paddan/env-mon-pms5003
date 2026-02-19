@@ -9,10 +9,15 @@ use embedded_graphics::{
     },
     pixelcolor::{BinaryColor, Rgb565},
     prelude::*,
-    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle, Triangle},
+    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle},
 };
 use heapless::String;
 use micromath::F32Ext;
+use u8g2_fonts::{
+    fonts,
+    types::{FontColor, VerticalPosition},
+    FontRenderer,
+};
 
 use crate::{bme280::BmeReading, pms5003::Pms5003Reading};
 
@@ -32,6 +37,7 @@ const ORANGE: DisplayColor = DisplayColor::new(31, 34, 0);
 const RED: DisplayColor = DisplayColor::new(31, 4, 4);
 
 // Fonts
+#[allow(dead_code)]
 #[derive(Copy, Clone)]
 enum FontToken {
     Small,
@@ -47,37 +53,54 @@ struct TextStyleCfg {
     color: DisplayColor,
 }
 
+#[derive(Copy, Clone)]
+enum U8g2FontToken {
+    Logisoso20,
+    Logisoso24,
+}
+
+#[derive(Copy, Clone)]
+enum ResolvedFont {
+    Mono(&'static MonoFont<'static>),
+    U8g2(U8g2FontToken),
+}
+
 // Typography by function
 const STYLE_HEADER_TEXT: TextStyleCfg = TextStyleCfg {
     font: FontToken::Small,
-    color: TEXT_WHITE,
+    color: TEXT_DIM,
 };
 
 const STYLE_CLIMATE_LABEL: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Small,
+    font: FontToken::Medium,
     color: TEXT_DIM,
 };
 const STYLE_CLIMATE_TEMP_VALUE: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Medium,
+    font: FontToken::Large,
     color: NEON_GREEN,
 };
 const STYLE_CLIMATE_HUM_VALUE: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Medium,
+    font: FontToken::Large,
     color: BLUE,
 };
 const STYLE_CLIMATE_PRESSURE_VALUE: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Medium,
-    color: TEXT_DIM,
+    font: FontToken::Large,
+    color: YELLOW,
 };
+const CLIMATE_VALUE_GAP_Y: i32 = 3;
+const CLIMATE_VALUE_CLEAR_PAD_Y: i32 = 1;
+const CLIMATE_TEMP_VALUE_CLEAR_W: u32 = 72;
+const CLIMATE_PRESSURE_VALUE_CLEAR_W: u32 = 92;
+const CLIMATE_HUM_VALUE_CLEAR_W: u32 = 40;
 
-const STYLE_AQI_STATUS: TextStyleCfg = TextStyleCfg {
+const STYLE_STATUS_TEXT: TextStyleCfg = TextStyleCfg {
     font: FontToken::Medium,
     color: TEXT_DIM,
 };
 
 const STYLE_PARTICLE_LABEL: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Small,
-    color: TEXT_WHITE,
+    font: FontToken::Medium,
+    color: TEXT_DIM,
 };
 const STYLE_PARTICLE_VALUE: TextStyleCfg = TextStyleCfg {
     font: FontToken::Larger,
@@ -156,50 +179,13 @@ const LABEL_PM05: LabelCfg = LabelCfg {
 // Dynamic fields by function
 const FIELD_HEADER: FieldCfg = FieldCfg {
     x: 8,
-    y: 176,
+    y: 178,
     clear_x: 8,
-    clear_y: 176,
+    clear_y: 178,
     clear_w: 220,
     clear_h: 12,
     style: STYLE_HEADER_TEXT,
 };
-const FIELD_TEMP: FieldCfg = FieldCfg {
-    x: 8,
-    y: 15,
-    clear_x: 8,
-    clear_y: 15,
-    clear_w: 72,
-    clear_h: 14,
-    style: STYLE_CLIMATE_TEMP_VALUE,
-};
-const FIELD_HUM: FieldCfg = FieldCfg {
-    x: 198,
-    y: 15,
-    clear_x: 198,
-    clear_y: 15,
-    clear_w: 40,
-    clear_h: 14,
-    style: STYLE_CLIMATE_HUM_VALUE,
-};
-const FIELD_PRESSURE: FieldCfg = FieldCfg {
-    x: 96,
-    y: 15,
-    clear_x: 96,
-    clear_y: 15,
-    clear_w: 92,
-    clear_h: 14,
-    style: STYLE_CLIMATE_PRESSURE_VALUE,
-};
-const FIELD_AQI: FieldCfg = FieldCfg {
-    x: 0,
-    y: 0,
-    clear_x: 0,
-    clear_y: 0,
-    clear_w: 0,
-    clear_h: 0,
-    style: STYLE_AQI_STATUS,
-};
-
 const FIELD_PM1: FieldCfg = FieldCfg {
     x: 8,
     y: 224,
@@ -211,9 +197,9 @@ const FIELD_PM1: FieldCfg = FieldCfg {
 };
 const FIELD_PM25: FieldCfg = FieldCfg {
     x: 88,
-    y: 228,
+    y: 224,
     clear_x: 88,
-    clear_y: 228,
+    clear_y: 224,
     clear_w: 68,
     clear_h: 22,
     style: STYLE_PARTICLE_VALUE,
@@ -248,9 +234,9 @@ const FIELD_PM05: FieldCfg = FieldCfg {
 
 // Gauge geometry and style
 const GAUGE_CENTER: Point = Point::new(120, 154);
-const GAUGE_DIAMETER: u32 = 170;
+const GAUGE_DIAMETER: u32 = 190;
 
-// Display orientation on this panel maps positive sweep to the desired upper AQI arc.
+// Display orientation on this panel maps positive sweep to the desired upper status arc.
 const GAUGE_START_DEG: f32 = 180.0;
 const GAUGE_TOTAL_SWEEP_DEG: f32 = 180.0;
 
@@ -258,30 +244,33 @@ const GAUGE_BAND_OUTER_W: u32 = 18;
 const GAUGE_BAND_EDGE_W: u32 = 14;
 const GAUGE_BAND_FILL_W: u32 = 10;
 const GAUGE_BAND_HIGHLIGHT_W: u32 = 6;
+const GAUGE_GRADIENT_STEP_DEG_STATIC: f32 = 4.0;
+const GAUGE_GRADIENT_STEP_DEG_RESTORE: f32 = 3.0;
+const GAUGE_COLOR_BLEND_SPAN_DEG: f32 = 30.0;
 
-const GAUGE_TICK_W: u32 = 8;
-const GAUGE_TICK_SPAN_DEG: f32 = 3.0;
-const GAUGE_MARKER_W: u32 = 8;
-const GAUGE_MARKER_SPAN_DEG: f32 = 5.0;
-const GAUGE_NEEDLE_INNER_R: i32 = 8;
-const GAUGE_NEEDLE_OUTER_R: i32 = 70;
-const GAUGE_NEEDLE_W: u32 = 4;
-const GAUGE_NEEDLE_SHADOW_W: u32 = 6;
-const GAUGE_NEEDLE_CLEAR_W: u32 = 8;
+const GAUGE_REF_DIAMETER: i32 = 190;
+const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.1;
+const GAUGE_POINTER_MAX_EXTRA_R_BASE: i32 = 120;
+const GAUGE_RESTORE_SPAN_DEG: f32 = 7.0;
+const GAUGE_NEEDLE_INNER_R_BASE: i32 = 8;
+const GAUGE_NEEDLE_OUTER_R_BASE: i32 = 70;
+const GAUGE_NEEDLE_W_BASE: i32 = 4;
+const GAUGE_NEEDLE_SHADOW_W_BASE: i32 = 6;
+const GAUGE_NEEDLE_CLEAR_W_BASE: i32 = 8;
 const GAUGE_NEEDLE_COLOR: DisplayColor = TEXT_WHITE;
 const GAUGE_NEEDLE_SHADOW_COLOR: DisplayColor = DisplayColor::new(5, 12, 5);
-const GAUGE_HUB_D: u32 = 10;
-const GAUGE_HUB_CLEAR_D: u32 = 12;
+const GAUGE_HUB_D_BASE: u32 = 10;
+const GAUGE_HUB_CLEAR_D_BASE: u32 = 12;
 const GAUGE_HUB_COLOR: DisplayColor = TEXT_WHITE;
-const AQI_STATUS_GAP_Y: i32 = 10;
-const AQI_STATUS_CLEAR_PAD_X: i32 = 4;
-const AQI_STATUS_CLEAR_PAD_Y: i32 = 2;
-const AQI_STATUS_MAX_CHARS: i32 = 16;
-const GAUGE_ARROW_LEN: i32 = 11;
-const GAUGE_ARROW_HALF_W: i32 = 6;
-const GAUGE_ARROW_TIP_OFFSET: i32 = 3;
-const GAUGE_ARROW_SHADOW_PAD: i32 = 1;
-const GAUGE_ARROW_CLEAR_PAD: i32 = 2;
+const STATUS_TEXT_GAP_Y: i32 = 20;
+const STATUS_TEXT_CLEAR_PAD_X: i32 = 4;
+const STATUS_TEXT_CLEAR_PAD_Y: i32 = 2;
+const STATUS_TEXT_MAX_CHARS: i32 = 16;
+const GAUGE_ARROW_LEN_BASE: i32 = 11;
+const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
+const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
+const GAUGE_ARROW_SHADOW_PAD_BASE: i32 = 1;
+const GAUGE_ARROW_CLEAR_PAD_BASE: i32 = 2;
 
 #[derive(Copy, Clone)]
 struct GaugeSegmentCfg {
@@ -315,13 +304,13 @@ pub struct DisplayCache {
     temp: String<16>,
     hum: String<16>,
     pressure: String<16>,
-    aqi: String<16>,
+    status_text: String<16>,
     pm25: String<8>,
     pm1: String<8>,
     pm10: String<8>,
     pm03: String<8>,
     pm05: String<8>,
-    aqi_value: Option<u16>,
+    status_index: Option<u16>,
 }
 
 impl DisplayCache {
@@ -332,13 +321,13 @@ impl DisplayCache {
             temp: String::new(),
             hum: String::new(),
             pressure: String::new(),
-            aqi: String::new(),
+            status_text: String::new(),
             pm25: String::new(),
             pm1: String::new(),
             pm10: String::new(),
             pm03: String::new(),
             pm05: String::new(),
-            aqi_value: None,
+            status_index: None,
         }
     }
 }
@@ -358,7 +347,7 @@ pub fn render_tft<D>(
     cache: &mut DisplayCache,
     pms: Option<Pms5003Reading>,
     bme: Option<BmeReading>,
-    sensor_label: Option<&str>,
+    _sensor_label: Option<&str>,
 ) where
     D: DrawTarget<Color = DisplayColor>,
 {
@@ -367,7 +356,7 @@ pub fn render_tft<D>(
         cache.static_layout_drawn = true;
     }
 
-    draw_dynamic(display, cache, pms, bme, sensor_label);
+    draw_dynamic(display, cache, pms, bme);
 }
 
 fn draw_static_layout<D>(display: &mut D)
@@ -413,7 +402,6 @@ fn draw_dynamic<D>(
     cache: &mut DisplayCache,
     pms: Option<Pms5003Reading>,
     bme: Option<BmeReading>,
-    sensor_label: Option<&str>,
 ) where
     D: DrawTarget<Color = DisplayColor>,
 {
@@ -451,16 +439,16 @@ fn draw_dynamic<D>(
     let mut pm10_text: String<8> = String::new();
     let mut pm03_text: String<8> = String::new();
     let mut pm05_text: String<8> = String::new();
-    let mut aqi_value = None;
+    let mut status_index = None;
 
     if let Some(reading) = pms {
-        let _ = write!(pm25_text, "{:03}", reading.pm2_5_atm);
-        let _ = write!(pm1_text, "{:03}", reading.pm1_0_atm);
-        let _ = write!(pm10_text, "{:03}", reading.pm10_atm);
+        let _ = write!(pm25_text, "{}", reading.pm2_5_atm);
+        let _ = write!(pm1_text, "{}", reading.pm1_0_atm);
+        let _ = write!(pm10_text, "{}", reading.pm10_atm);
         let _ = write!(pm03_text, "{}", reading.particles_0_3um);
         let _ = write!(pm05_text, "{}", reading.particles_0_5um);
 
-        aqi_value = Some(aqi_from_pm25(reading.pm2_5_atm));
+        status_index = Some(air_quality_index_from_pm25(reading.pm2_5_atm));
     } else {
         let _ = pm25_text.push_str("---");
         let _ = pm1_text.push_str("---");
@@ -469,19 +457,34 @@ fn draw_dynamic<D>(
         let _ = pm05_text.push_str("---");
     }
 
-    let header = sensor_label.unwrap_or("ENV MONITOR");
+    let header = "ENV-MONITOR by JPL Design";
+    let field_temp = climate_value_field(
+        LABEL_TEMP.x,
+        CLIMATE_TEMP_VALUE_CLEAR_W,
+        STYLE_CLIMATE_TEMP_VALUE,
+    );
+    let field_pressure = climate_value_field(
+        LABEL_PRESSURE.x,
+        CLIMATE_PRESSURE_VALUE_CLEAR_W,
+        STYLE_CLIMATE_PRESSURE_VALUE,
+    );
+    let field_hum = climate_value_field(
+        LABEL_RH.x,
+        CLIMATE_HUM_VALUE_CLEAR_W,
+        STYLE_CLIMATE_HUM_VALUE,
+    );
 
     update_field_if_changed(display, &mut cache.header, header, FIELD_HEADER);
-    update_field_if_changed(display, &mut cache.temp, temp_text.as_str(), FIELD_TEMP);
-    update_field_if_changed(display, &mut cache.hum, hum_text.as_str(), FIELD_HUM);
+    update_field_if_changed(display, &mut cache.temp, temp_text.as_str(), field_temp);
+    update_field_if_changed(display, &mut cache.hum, hum_text.as_str(), field_hum);
     update_field_if_changed(
         display,
         &mut cache.pressure,
         pressure_text.as_str(),
-        FIELD_PRESSURE,
+        field_pressure,
     );
-    let aqi_status = aqi_level_text(aqi_value);
-    update_aqi_if_changed(display, cache, aqi_status, aqi_value);
+    let status_text = air_quality_level_text(status_index);
+    update_status_if_changed(display, cache, status_text, status_index);
 
     update_field_if_changed(display, &mut cache.pm1, pm1_text.as_str(), FIELD_PM1);
     update_field_if_changed(display, &mut cache.pm25, pm25_text.as_str(), FIELD_PM25);
@@ -490,24 +493,41 @@ fn draw_dynamic<D>(
     update_field_if_changed(display, &mut cache.pm05, pm05_text.as_str(), FIELD_PM05);
 }
 
+fn climate_value_y() -> i32 {
+    let label_font = font_for(STYLE_CLIMATE_LABEL.font);
+    LABEL_TEMP.y + font_height(label_font) + CLIMATE_VALUE_GAP_Y
+}
+
+fn climate_value_field(x: i32, clear_w: u32, style: TextStyleCfg) -> FieldCfg {
+    let y = climate_value_y();
+    let text_h = font_height(font_for(style.font));
+    let clear_y = y - CLIMATE_VALUE_CLEAR_PAD_Y;
+    let clear_h = (text_h + CLIMATE_VALUE_CLEAR_PAD_Y * 2).max(1) as u32;
+
+    FieldCfg {
+        x,
+        y,
+        clear_x: x,
+        clear_y,
+        clear_w,
+        clear_h,
+        style,
+    }
+}
+
 fn draw_gauge_scale<D>(display: &mut D)
 where
     D: DrawTarget<Color = DisplayColor>,
 {
-    let mut angle = GAUGE_START_DEG;
-
-    for (idx, segment) in GAUGE_SEGMENTS.iter().enumerate() {
-        let sweep = segment.sweep_deg.copysign(GAUGE_TOTAL_SWEEP_DEG);
-        draw_arc_band(display, angle, sweep, segment.color);
-        angle += sweep;
-
-        if idx < GAUGE_SEGMENTS.len() - 1 {
-            draw_tick(display, angle);
-        }
-    }
+    draw_gauge_gradient_span(
+        display,
+        GAUGE_START_DEG,
+        GAUGE_TOTAL_SWEEP_DEG,
+        GAUGE_GRADIENT_STEP_DEG_STATIC,
+    );
 }
 
-fn update_aqi_if_changed<D>(
+fn update_status_if_changed<D>(
     display: &mut D,
     cache: &mut DisplayCache,
     text: &str,
@@ -515,38 +535,36 @@ fn update_aqi_if_changed<D>(
 ) where
     D: DrawTarget<Color = DisplayColor>,
 {
-    if cache.aqi.as_str() == text && cache.aqi_value == value {
+    if cache.status_text.as_str() == text && cache.status_index == value {
         return;
     }
 
-    // Remove previous marker by restoring the underlying gauge highlight color.
-    if let Some(prev) = cache.aqi_value {
-        let ratio = aqi_ratio(prev);
+    if let Some(prev) = cache.status_index {
+        let ratio = status_ratio(prev);
         let angle = gauge_angle(ratio);
-        erase_aqi_needle(display, angle);
-        draw_aqi_marker(display, angle, gauge_marker_bg_color(ratio));
+        erase_status_needle(display, angle);
+        restore_gauge_slice(display, angle);
     }
 
     let value_style = TextStyleCfg {
-        font: FIELD_AQI.style.font,
-        color: value.map(aqi_color).unwrap_or(TEXT_DIM),
+        font: STYLE_STATUS_TEXT.font,
+        color: value.map(status_color).unwrap_or(TEXT_DIM),
     };
     let font = font_for(value_style.font);
-    clear_rect(display, aqi_status_clear_rect(font));
+    clear_rect(display, status_text_clear_rect(font));
 
-    let text_pos = centered_aqi_status_pos(font, text);
+    let text_pos = centered_status_text_pos(font, text);
     draw_text_aa(display, text_pos, font, value_style.color, text);
 
-    if let Some(aqi) = value {
-        let ratio = aqi_ratio(aqi);
+    if let Some(index) = value {
+        let ratio = status_ratio(index);
         let angle = gauge_angle(ratio);
-        draw_aqi_marker(display, angle, TEXT_WHITE);
-        draw_aqi_needle(display, angle);
+        draw_status_needle(display, angle);
     }
 
-    cache.aqi.clear();
-    let _ = cache.aqi.push_str(text);
-    cache.aqi_value = value;
+    cache.status_text.clear();
+    let _ = cache.status_text.push_str(text);
+    cache.status_index = value;
 }
 
 fn draw_arc_band<D>(display: &mut D, start_deg: f32, sweep_deg: f32, color: DisplayColor)
@@ -602,122 +620,173 @@ where
         .draw(display);
 }
 
-fn draw_tick<D>(display: &mut D, angle_deg: f32)
+fn draw_status_needle<D>(display: &mut D, angle_deg: f32)
 where
     D: DrawTarget<Color = DisplayColor>,
 {
-    let dir = if GAUGE_TOTAL_SWEEP_DEG >= 0.0 {
-        1.0
-    } else {
-        -1.0
-    };
-    let half = (GAUGE_TICK_SPAN_DEG * 0.5) * dir;
+    let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
+    let outer_r = pointer_outer_radius(inner_r);
+    let arrow_len = gauge_scale_i32(GAUGE_ARROW_LEN_BASE);
+    let arrow_half_w = gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE);
+    let arrow_tip_offset = gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE);
+    let shadow_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_SHADOW_PAD_BASE);
 
-    let _ = Arc::with_center(
-        GAUGE_CENTER,
-        GAUGE_DIAMETER,
-        (angle_deg + half).deg(),
-        (-GAUGE_TICK_SPAN_DEG * dir).deg(),
-    )
-    .into_styled(PrimitiveStyle::with_stroke(TEXT_WHITE, GAUGE_TICK_W))
-    .draw(display);
-}
-
-fn draw_aqi_marker<D>(display: &mut D, angle_deg: f32, color: DisplayColor)
-where
-    D: DrawTarget<Color = DisplayColor>,
-{
-    let dir = if GAUGE_TOTAL_SWEEP_DEG >= 0.0 {
-        1.0
-    } else {
-        -1.0
-    };
-    let half = (GAUGE_MARKER_SPAN_DEG * 0.5) * dir;
-
-    let _ = Arc::with_center(
-        GAUGE_CENTER,
-        GAUGE_DIAMETER,
-        (angle_deg + half).deg(),
-        (-GAUGE_MARKER_SPAN_DEG * dir).deg(),
-    )
-    .into_styled(PrimitiveStyle::with_stroke(color, GAUGE_MARKER_W))
-    .draw(display);
-}
-
-fn draw_aqi_needle<D>(display: &mut D, angle_deg: f32)
-where
-    D: DrawTarget<Color = DisplayColor>,
-{
     let (start, shaft_end, tip, left, right) = needle_geometry(
         angle_deg,
-        GAUGE_ARROW_LEN,
-        GAUGE_ARROW_HALF_W,
-        GAUGE_ARROW_TIP_OFFSET,
+        inner_r,
+        outer_r,
+        arrow_len,
+        arrow_half_w,
+        arrow_tip_offset,
     );
     let (_, _, shadow_tip, shadow_left, shadow_right) = needle_geometry(
         angle_deg,
-        GAUGE_ARROW_LEN + GAUGE_ARROW_SHADOW_PAD,
-        GAUGE_ARROW_HALF_W + GAUGE_ARROW_SHADOW_PAD,
-        GAUGE_ARROW_TIP_OFFSET + GAUGE_ARROW_SHADOW_PAD,
+        inner_r,
+        outer_r,
+        arrow_len + shadow_pad,
+        arrow_half_w + shadow_pad,
+        arrow_tip_offset + shadow_pad,
     );
 
-    let _ = Line::new(start, shaft_end)
-        .into_styled(PrimitiveStyle::with_stroke(
-            GAUGE_NEEDLE_SHADOW_COLOR,
-            GAUGE_NEEDLE_SHADOW_W,
-        ))
-        .draw(display);
+    draw_capsule_aa(
+        display,
+        start,
+        shaft_end,
+        gauge_scale_i32_nonzero(GAUGE_NEEDLE_SHADOW_W_BASE) as f32,
+        GAUGE_NEEDLE_SHADOW_COLOR,
+    );
+    fill_triangle_aa(
+        display,
+        shadow_tip,
+        shadow_left,
+        shadow_right,
+        GAUGE_NEEDLE_SHADOW_COLOR,
+    );
 
-    let _ = Triangle::new(shadow_tip, shadow_left, shadow_right)
-        .into_styled(PrimitiveStyle::with_fill(GAUGE_NEEDLE_SHADOW_COLOR))
-        .draw(display);
+    draw_capsule_aa(
+        display,
+        start,
+        shaft_end,
+        gauge_scale_i32_nonzero(GAUGE_NEEDLE_W_BASE) as f32,
+        GAUGE_NEEDLE_COLOR,
+    );
+    fill_triangle_aa(display, tip, left, right, GAUGE_NEEDLE_COLOR);
 
-    let _ = Line::new(start, shaft_end)
-        .into_styled(PrimitiveStyle::with_stroke(
-            GAUGE_NEEDLE_COLOR,
-            GAUGE_NEEDLE_W,
-        ))
-        .draw(display);
-
-    let _ = Triangle::new(tip, left, right)
-        .into_styled(PrimitiveStyle::with_fill(GAUGE_NEEDLE_COLOR))
-        .draw(display);
-
-    let _ = Circle::with_center(GAUGE_CENTER, GAUGE_HUB_D)
+    let _ = Circle::with_center(GAUGE_CENTER, gauge_scale_u32_nonzero(GAUGE_HUB_D_BASE))
         .into_styled(PrimitiveStyle::with_fill(GAUGE_HUB_COLOR))
         .draw(display);
 }
 
-fn erase_aqi_needle<D>(display: &mut D, angle_deg: f32)
+fn erase_status_needle<D>(display: &mut D, angle_deg: f32)
 where
     D: DrawTarget<Color = DisplayColor>,
 {
+    let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
+    let outer_r = pointer_outer_radius(inner_r);
+    let clear_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_CLEAR_PAD_BASE);
+
     let (start, _, tip, left, right) = needle_geometry(
         angle_deg,
-        GAUGE_ARROW_LEN + GAUGE_ARROW_CLEAR_PAD,
-        GAUGE_ARROW_HALF_W + GAUGE_ARROW_CLEAR_PAD,
-        GAUGE_ARROW_TIP_OFFSET + GAUGE_ARROW_CLEAR_PAD,
+        inner_r,
+        outer_r,
+        gauge_scale_i32(GAUGE_ARROW_LEN_BASE) + clear_pad,
+        gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE) + clear_pad,
+        gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE) + clear_pad,
     );
 
-    let _ = Line::new(start, tip)
-        .into_styled(PrimitiveStyle::with_stroke(BG_COLOR, GAUGE_NEEDLE_CLEAR_W))
-        .draw(display);
+    draw_capsule_aa(
+        display,
+        start,
+        tip,
+        gauge_scale_i32_nonzero(GAUGE_NEEDLE_CLEAR_W_BASE) as f32,
+        BG_COLOR,
+    );
 
-    let _ = Triangle::new(tip, left, right)
-        .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
-        .draw(display);
+    fill_triangle_aa(display, tip, left, right, BG_COLOR);
 
-    let _ = Circle::with_center(GAUGE_CENTER, GAUGE_HUB_CLEAR_D)
-        .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
-        .draw(display);
+    let _ = Circle::with_center(
+        GAUGE_CENTER,
+        gauge_scale_u32_nonzero(GAUGE_HUB_CLEAR_D_BASE),
+    )
+    .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
+    .draw(display);
 }
 
-fn aqi_ratio(aqi: u16) -> f32 {
-    aqi.min(300) as f32 / 300.0
+fn status_ratio(index: u16) -> f32 {
+    index.min(300) as f32 / 300.0
 }
 
 fn gauge_angle(ratio: f32) -> f32 {
     GAUGE_START_DEG + ratio.clamp(0.0, 1.0) * GAUGE_TOTAL_SWEEP_DEG
+}
+
+fn gauge_scale_i32(base: i32) -> i32 {
+    ((base * GAUGE_DIAMETER as i32) + (GAUGE_REF_DIAMETER / 2)) / GAUGE_REF_DIAMETER
+}
+
+fn gauge_scale_i32_nonzero(base: i32) -> i32 {
+    gauge_scale_i32(base).max(1)
+}
+
+fn gauge_scale_u32_nonzero(base: u32) -> u32 {
+    let scaled =
+        ((base as i32 * GAUGE_DIAMETER as i32) + (GAUGE_REF_DIAMETER / 2)) / GAUGE_REF_DIAMETER;
+    scaled.max(1) as u32
+}
+
+fn pointer_outer_radius(inner_r: i32) -> i32 {
+    let gauge_r = (GAUGE_DIAMETER as i32) / 2;
+    let min_outer = inner_r + 1;
+    let base_outer = gauge_scale_i32(GAUGE_NEEDLE_OUTER_R_BASE);
+    let desired_outer = round_to_i32(base_outer as f32 * GAUGE_POINTER_LENGTH_FACTOR.max(0.1));
+    let max_outer = gauge_r + gauge_scale_i32(GAUGE_POINTER_MAX_EXTRA_R_BASE);
+
+    desired_outer.clamp(min_outer, max_outer.max(min_outer))
+}
+
+fn restore_gauge_slice<D>(display: &mut D, angle_deg: f32)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let dir = if GAUGE_TOTAL_SWEEP_DEG >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let sweep = GAUGE_RESTORE_SPAN_DEG * dir;
+    let start = angle_deg - (sweep * 0.5);
+    draw_gauge_gradient_span(display, start, sweep, GAUGE_GRADIENT_STEP_DEG_RESTORE);
+}
+
+fn angle_to_ratio(angle_deg: f32) -> f32 {
+    if GAUGE_TOTAL_SWEEP_DEG.abs() < f32::EPSILON {
+        0.0
+    } else {
+        ((angle_deg - GAUGE_START_DEG) / GAUGE_TOTAL_SWEEP_DEG).clamp(0.0, 1.0)
+    }
+}
+
+fn draw_gauge_gradient_span<D>(display: &mut D, start_deg: f32, sweep_deg: f32, step_deg: f32)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let total_sweep = sweep_deg.abs();
+    if total_sweep <= f32::EPSILON {
+        return;
+    }
+
+    let dir = if sweep_deg >= 0.0 { 1.0 } else { -1.0 };
+    let step = step_deg.max(0.25);
+    let mut walked = 0.0f32;
+
+    while walked < total_sweep {
+        let chunk = (total_sweep - walked).min(step);
+        let chunk_start = start_deg + walked * dir;
+        let chunk_mid = chunk_start + (chunk * 0.5) * dir;
+        let color = gauge_gradient_color(angle_to_ratio(chunk_mid));
+        draw_arc_band(display, chunk_start, chunk * dir, color);
+        walked += chunk;
+    }
 }
 
 fn polar_point(center: Point, radius: i32, angle_deg: f32) -> Point {
@@ -729,20 +798,118 @@ fn polar_point(center: Point, radius: i32, angle_deg: f32) -> Point {
 
 fn needle_geometry(
     angle_deg: f32,
+    inner_r: i32,
+    outer_r: i32,
     arrow_len: i32,
     arrow_half_w: i32,
     arrow_tip_offset: i32,
 ) -> (Point, Point, Point, Point, Point) {
-    let start = polar_point(GAUGE_CENTER, GAUGE_NEEDLE_INNER_R, angle_deg);
-    let base = polar_point(GAUGE_CENTER, GAUGE_NEEDLE_OUTER_R - arrow_len, angle_deg);
-    let tip = polar_point(
-        GAUGE_CENTER,
-        GAUGE_NEEDLE_OUTER_R + arrow_tip_offset,
-        angle_deg,
-    );
+    let start = polar_point(GAUGE_CENTER, inner_r, angle_deg);
+    let base = polar_point(GAUGE_CENTER, outer_r - arrow_len, angle_deg);
+    let tip = polar_point(GAUGE_CENTER, outer_r + arrow_tip_offset, angle_deg);
     let left = polar_point(base, arrow_half_w, angle_deg + 90.0);
     let right = polar_point(base, arrow_half_w, angle_deg - 90.0);
     (start, base, tip, left, right)
+}
+
+fn draw_capsule_aa<D>(display: &mut D, start: Point, end: Point, width: f32, color: DisplayColor)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let half_w = (width * 0.5).max(0.5);
+    let pad = round_to_i32(half_w + 1.0);
+    let min_x = start.x.min(end.x) - pad;
+    let max_x = start.x.max(end.x) + pad;
+    let min_y = start.y.min(end.y) - pad;
+    let max_y = start.y.max(end.y) + pad;
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let alpha = capsule_alpha(x as f32 + 0.5, y as f32 + 0.5, start, end, half_w);
+            if alpha <= 0.0 {
+                continue;
+            }
+
+            let a = round_to_i32((alpha * 255.0).clamp(0.0, 255.0)) as u8;
+            draw_pixel_safe(display, Point::new(x, y), scale_color(color, a));
+        }
+    }
+}
+
+fn capsule_alpha(px: f32, py: f32, start: Point, end: Point, half_w: f32) -> f32 {
+    let dist = point_segment_distance(px, py, start, end);
+    (half_w + 0.5 - dist).clamp(0.0, 1.0)
+}
+
+fn point_segment_distance(px: f32, py: f32, start: Point, end: Point) -> f32 {
+    let ax = start.x as f32;
+    let ay = start.y as f32;
+    let bx = end.x as f32;
+    let by = end.y as f32;
+    let vx = bx - ax;
+    let vy = by - ay;
+    let len2 = vx * vx + vy * vy;
+
+    if len2 <= 0.0001 {
+        let dx = px - ax;
+        let dy = py - ay;
+        return (dx * dx + dy * dy).sqrt();
+    }
+
+    let t = (((px - ax) * vx + (py - ay) * vy) / len2).clamp(0.0, 1.0);
+    let cx = ax + t * vx;
+    let cy = ay + t * vy;
+    let dx = px - cx;
+    let dy = py - cy;
+    (dx * dx + dy * dy).sqrt()
+}
+
+fn fill_triangle_aa<D>(display: &mut D, a: Point, b: Point, c: Point, color: DisplayColor)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let min_x = a.x.min(b.x).min(c.x);
+    let max_x = a.x.max(b.x).max(c.x);
+    let min_y = a.y.min(b.y).min(c.y);
+    let max_y = a.y.max(b.y).max(c.y);
+    let sample_offsets = [0.25_f32, 0.75_f32];
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let mut covered = 0u8;
+            for sy in sample_offsets {
+                for sx in sample_offsets {
+                    if point_in_triangle(x as f32 + sx, y as f32 + sy, a, b, c) {
+                        covered += 1;
+                    }
+                }
+            }
+
+            if covered == 0 {
+                continue;
+            }
+
+            let alpha = (covered as u16 * 255 / 4) as u8;
+            draw_pixel_safe(display, Point::new(x, y), scale_color(color, alpha));
+        }
+    }
+}
+
+fn point_in_triangle(px: f32, py: f32, a: Point, b: Point, c: Point) -> bool {
+    let w0 = edge_fn(b, c, px, py);
+    let w1 = edge_fn(c, a, px, py);
+    let w2 = edge_fn(a, b, px, py);
+    let has_neg = w0 < 0.0 || w1 < 0.0 || w2 < 0.0;
+    let has_pos = w0 > 0.0 || w1 > 0.0 || w2 > 0.0;
+    !(has_neg && has_pos)
+}
+
+fn edge_fn(a: Point, b: Point, px: f32, py: f32) -> f32 {
+    let ax = a.x as f32;
+    let ay = a.y as f32;
+    let bx = b.x as f32;
+    let by = b.y as f32;
+    (px - ax) * (by - ay) - (py - ay) * (bx - ax)
 }
 
 fn round_to_i32(v: f32) -> i32 {
@@ -753,22 +920,60 @@ fn round_to_i32(v: f32) -> i32 {
     }
 }
 
-fn gauge_marker_bg_color(ratio: f32) -> DisplayColor {
+fn gauge_gradient_color(ratio: f32) -> DisplayColor {
     let mut accum = 0.0f32;
-    let total = GAUGE_SEGMENTS
-        .iter()
-        .fold(0.0f32, |sum, seg| sum + seg.sweep_deg.abs())
-        .max(1.0);
+    let total = gauge_total_span_deg();
     let target = ratio.clamp(0.0, 1.0) * total;
+    let blend_half = (GAUGE_COLOR_BLEND_SPAN_DEG * 0.5).max(0.1);
 
-    for seg in GAUGE_SEGMENTS {
-        accum += seg.sweep_deg.abs();
-        if target <= accum {
-            return brighten(seg.color, 4);
+    for (idx, seg) in GAUGE_SEGMENTS.iter().enumerate() {
+        let seg_span = seg.sweep_deg.abs();
+        let seg_end = accum + seg_span;
+
+        if idx + 1 < GAUGE_SEGMENTS.len() {
+            let blend_start = (seg_end - blend_half).max(accum);
+            let blend_end = (seg_end + blend_half).min(total);
+
+            if target >= blend_start && target <= blend_end {
+                let next = GAUGE_SEGMENTS[idx + 1].color;
+                let denom = (blend_end - blend_start).max(0.001);
+                let t = ((target - blend_start) / denom).clamp(0.0, 1.0);
+                return lerp_color(seg.color, next, t);
+            }
         }
+
+        if target <= seg_end {
+            return seg.color;
+        }
+
+        accum = seg_end;
     }
 
-    brighten(RED, 4)
+    RED
+}
+
+fn gauge_total_span_deg() -> f32 {
+    GAUGE_SEGMENTS
+        .iter()
+        .fold(0.0f32, |sum, seg| sum + seg.sweep_deg.abs())
+        .max(1.0)
+}
+
+fn lerp_color(a: DisplayColor, b: DisplayColor, t: f32) -> DisplayColor {
+    let clamped_t = t.clamp(0.0, 1.0);
+    DisplayColor::new(
+        lerp_u5(a.r(), b.r(), clamped_t),
+        lerp_u6(a.g(), b.g(), clamped_t),
+        lerp_u5(a.b(), b.b(), clamped_t),
+    )
+}
+
+fn lerp_u5(a: u8, b: u8, t: f32) -> u8 {
+    round_to_i32(a as f32 + (b as f32 - a as f32) * t).clamp(0, 31) as u8
+}
+
+fn lerp_u6(a: u8, b: u8, t: f32) -> u8 {
+    round_to_i32(a as f32 + (b as f32 - a as f32) * t).clamp(0, 63) as u8
 }
 
 fn draw_label<D>(display: &mut D, label: LabelCfg)
@@ -819,50 +1024,68 @@ fn update_field_if_changed<D, const N: usize>(
     let _ = previous.push_str(current);
 }
 
-fn font_for(font: FontToken) -> &'static MonoFont<'static> {
+fn font_for(font: FontToken) -> ResolvedFont {
     match font {
-        FontToken::Small => &FONT_6X10,
-        FontToken::Medium => &FONT_8X13_BOLD,
-        FontToken::Large => &FONT_10X20,
-        FontToken::Larger => &FONT_10X20,
-        FontToken::Largest => &FONT_10X20,
+        FontToken::Small => ResolvedFont::Mono(&FONT_6X10),
+        FontToken::Medium => ResolvedFont::Mono(&FONT_8X13_BOLD),
+        FontToken::Large => ResolvedFont::Mono(&FONT_10X20),
+        FontToken::Larger => ResolvedFont::U8g2(U8g2FontToken::Logisoso20),
+        FontToken::Largest => ResolvedFont::U8g2(U8g2FontToken::Logisoso24),
     }
 }
 
-fn text_width(font: &MonoFont<'_>, text: &str) -> i32 {
-    let count = text.chars().count() as i32;
-    if count <= 0 {
-        return 0;
-    }
+fn text_width(font: ResolvedFont, text: &str) -> i32 {
+    match font {
+        ResolvedFont::Mono(mono) => {
+            let count = text.chars().count() as i32;
+            if count <= 0 {
+                return 0;
+            }
 
-    let glyph_w = font.character_size.width as i32;
-    let spacing = font.character_spacing as i32;
-    count * glyph_w + (count - 1) * spacing
+            let glyph_w = mono.character_size.width as i32;
+            let spacing = mono.character_spacing as i32;
+            count * glyph_w + (count - 1) * spacing
+        }
+        ResolvedFont::U8g2(face) => u8g2_text_width(face, text),
+    }
 }
 
-fn centered_aqi_status_pos(font: &MonoFont<'_>, text: &str) -> Point {
+fn centered_status_text_pos(font: ResolvedFont, text: &str) -> Point {
     let w = text_width(font, text);
     let x = GAUGE_CENTER.x - (w / 2);
-    let y = GAUGE_CENTER.y - font.character_size.height as i32 - AQI_STATUS_GAP_Y;
+    let y = GAUGE_CENTER.y - font_height(font) - STATUS_TEXT_GAP_Y;
     Point::new(x, y)
 }
 
-fn aqi_status_clear_rect(font: &MonoFont<'_>) -> Rectangle {
-    let max_chars = AQI_STATUS_MAX_CHARS.max(1);
-    let glyph_w = font.character_size.width as i32;
-    let spacing = font.character_spacing as i32;
+fn status_text_clear_rect(font: ResolvedFont) -> Rectangle {
+    let max_chars = STATUS_TEXT_MAX_CHARS.max(1);
+    let glyph_w = text_width(font, "0");
+    let spacing = match font {
+        ResolvedFont::Mono(mono) => mono.character_spacing as i32,
+        ResolvedFont::U8g2(_) => 1,
+    };
     let text_w = max_chars * glyph_w + (max_chars - 1) * spacing;
-    let text_h = font.character_size.height as i32;
+    let text_h = font_height(font);
 
-    let w = (text_w + AQI_STATUS_CLEAR_PAD_X * 2).max(0) as u32;
-    let h = (text_h + AQI_STATUS_CLEAR_PAD_Y * 2).max(0) as u32;
-    let x = GAUGE_CENTER.x - (text_w / 2) - AQI_STATUS_CLEAR_PAD_X;
-    let y = GAUGE_CENTER.y - text_h - AQI_STATUS_GAP_Y - AQI_STATUS_CLEAR_PAD_Y;
+    let w = (text_w + STATUS_TEXT_CLEAR_PAD_X * 2).max(0) as u32;
+    let h = (text_h + STATUS_TEXT_CLEAR_PAD_Y * 2).max(0) as u32;
+    let x = GAUGE_CENTER.x - (text_w / 2) - STATUS_TEXT_CLEAR_PAD_X;
+    let y = GAUGE_CENTER.y - text_h - STATUS_TEXT_GAP_Y - STATUS_TEXT_CLEAR_PAD_Y;
 
     Rectangle::new(Point::new(x, y), Size::new(w, h))
 }
 
-fn draw_text_aa<D>(
+fn draw_text_aa<D>(display: &mut D, pos: Point, font: ResolvedFont, color: DisplayColor, text: &str)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    match font {
+        ResolvedFont::Mono(mono) => draw_text_mono_aa(display, pos, mono, color, text),
+        ResolvedFont::U8g2(face) => draw_text_u8g2(display, pos, face, color, text),
+    }
+}
+
+fn draw_text_mono_aa<D>(
     display: &mut D,
     pos: Point,
     font: &MonoFont<'_>,
@@ -872,19 +1095,20 @@ fn draw_text_aa<D>(
     D: DrawTarget<Color = DisplayColor>,
 {
     let mut cursor = pos;
+    let advance = font.character_size.width as i32 + font.character_spacing as i32;
 
     for ch in text.chars() {
         if ch == ' ' {
-            cursor.x += font.character_size.width as i32 + font.character_spacing as i32;
+            cursor.x += advance;
             continue;
         }
 
         let (base, accent) = decompose_swedish_char(ch);
         draw_glyph_aa(display, font, base, cursor, color);
         if accent != AccentMark::None {
-            draw_accent_mark(display, font, cursor, color, accent);
+            draw_accent_mark_mono(display, font, cursor, color, accent);
         }
-        cursor.x += font.character_size.width as i32 + font.character_spacing as i32;
+        cursor.x += advance;
     }
 }
 
@@ -907,7 +1131,7 @@ fn decompose_swedish_char(ch: char) -> (char, AccentMark) {
     }
 }
 
-fn draw_accent_mark<D>(
+fn draw_accent_mark_mono<D>(
     display: &mut D,
     font: &MonoFont<'_>,
     origin: Point,
@@ -984,6 +1208,88 @@ fn draw_glyph_aa<D>(
             let _ = Pixel(p, c).draw(display);
         }
     }
+}
+
+fn draw_text_u8g2<D>(
+    display: &mut D,
+    pos: Point,
+    font: U8g2FontToken,
+    color: DisplayColor,
+    text: &str,
+) where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    match font {
+        U8g2FontToken::Logisoso20 => {
+            let renderer = FontRenderer::new::<fonts::u8g2_font_logisoso20_tr>()
+                .with_ignore_unknown_chars(true);
+            let _ = renderer.render(
+                text_ascii_fallback(text).as_str(),
+                pos,
+                VerticalPosition::Top,
+                FontColor::Transparent(color),
+                display,
+            );
+        }
+        U8g2FontToken::Logisoso24 => {
+            let renderer = FontRenderer::new::<fonts::u8g2_font_logisoso24_tr>()
+                .with_ignore_unknown_chars(true);
+            let _ = renderer.render(
+                text_ascii_fallback(text).as_str(),
+                pos,
+                VerticalPosition::Top,
+                FontColor::Transparent(color),
+                display,
+            );
+        }
+    }
+}
+
+fn u8g2_text_width(font: U8g2FontToken, text: &str) -> i32 {
+    let fallback = text_ascii_fallback(text);
+    let dims = match font {
+        U8g2FontToken::Logisoso20 => FontRenderer::new::<fonts::u8g2_font_logisoso20_tr>()
+            .with_ignore_unknown_chars(true)
+            .get_rendered_dimensions(fallback.as_str(), Point::zero(), VerticalPosition::Top),
+        U8g2FontToken::Logisoso24 => FontRenderer::new::<fonts::u8g2_font_logisoso24_tr>()
+            .with_ignore_unknown_chars(true)
+            .get_rendered_dimensions(fallback.as_str(), Point::zero(), VerticalPosition::Top),
+    };
+
+    dims.map(|d| d.advance.x.max(0)).unwrap_or(0)
+}
+
+fn u8g2_font_height(font: U8g2FontToken) -> i32 {
+    match font {
+        U8g2FontToken::Logisoso20 => {
+            FontRenderer::new::<fonts::u8g2_font_logisoso20_tr>().get_default_line_height() as i32
+        }
+        U8g2FontToken::Logisoso24 => {
+            FontRenderer::new::<fonts::u8g2_font_logisoso24_tr>().get_default_line_height() as i32
+        }
+    }
+}
+
+fn font_height(font: ResolvedFont) -> i32 {
+    match font {
+        ResolvedFont::Mono(mono) => mono.character_size.height as i32,
+        ResolvedFont::U8g2(face) => u8g2_font_height(face),
+    }
+}
+
+fn text_ascii_fallback(text: &str) -> String<64> {
+    let mut out: String<64> = String::new();
+    for ch in text.chars() {
+        let mapped = match ch {
+            'Å' | 'Ä' => 'A',
+            'Ö' => 'O',
+            'å' | 'ä' => 'a',
+            'ö' => 'o',
+            _ => ch,
+        };
+        let _ = out.push(mapped);
+    }
+    out
 }
 
 fn glyph_alpha(font: &MonoFont<'_>, ch: char, x: i32, y: i32) -> u8 {
@@ -1080,8 +1386,8 @@ fn brighten(color: DisplayColor, amount: u8) -> DisplayColor {
     )
 }
 
-fn aqi_color(aqi: u16) -> DisplayColor {
-    match aqi {
+fn status_color(index: u16) -> DisplayColor {
+    match index {
         0..=50 => GREEN,
         51..=100 => YELLOW,
         101..=150 => ORANGE,
@@ -1089,19 +1395,19 @@ fn aqi_color(aqi: u16) -> DisplayColor {
     }
 }
 
-fn aqi_level_text(aqi: Option<u16>) -> &'static str {
-    match aqi {
-        Some(0..=50) => "BRA",
-        Some(51..=100) => "OK",
-        Some(101..=150) => "SÄMRE",
-        Some(151..=200) => "DÅLIG!",
-        Some(201..=300) => "MYCKET DÅLIGT",
+fn air_quality_level_text(index: Option<u16>) -> &'static str {
+    match index {
+        Some(0..=50) => "BRA NIVÅ",
+        Some(51..=100) => "OK NIVÅ",
+        Some(101..=150) => "SÄMRE NIVÅ",
+        Some(151..=200) => "DÅLIG NIVÅ",
+        Some(201..=300) => "USEL NIVÅ",
         Some(_) => "FARLIG NIVÅ!",
         None => "INGEN DATA",
     }
 }
 
-fn aqi_from_pm25(pm25: u16) -> u16 {
+fn air_quality_index_from_pm25(pm25: u16) -> u16 {
     let c = pm25 as u32;
 
     let (cl, ch, il, ih) = if c <= 12 {
@@ -1118,6 +1424,6 @@ fn aqi_from_pm25(pm25: u16) -> u16 {
         (251, 500, 301, 500)
     };
 
-    let aqi = ((ih - il) * (c.saturating_sub(cl)) / (ch - cl)) + il;
-    aqi.min(500) as u16
+    let index = ((ih - il) * (c.saturating_sub(cl)) / (ch - cl)) + il;
+    index.min(500) as u16
 }

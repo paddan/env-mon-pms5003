@@ -389,6 +389,7 @@ dependencies = [
  "micromath",
  "mipidsi",
  "panic-halt",
+ "u8g2-fonts",
 ]
 
 [[package]]
@@ -1211,6 +1212,15 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "u8g2-fonts"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a356264f326cc2a2d0c4e11cfe6b46388a58e2835888aed7f58e43ea25a9e228"
+dependencies = [
+ "embedded-graphics-core",
+]
 
 [[package]]
 name = "ufmt-write"

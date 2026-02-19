@@ -16,6 +16,7 @@ heapless = "0.8"
 mipidsi = "0.10"
 micromath = "2.1"
 panic-halt = "1.0"
+u8g2-fonts = "0.6.0"
 
 [profile.release]
 opt-level = "s"

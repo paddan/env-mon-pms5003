@@ -13,4 +13,5 @@ if [[ -f "$HOME/export-esp.sh" ]]; then
 fi
 
 cargo build --release
-espflash flash --monitor --chip "$CHIP" --port "$PORT" "$BIN"
+espflash flash --chip "$CHIP" --port "$PORT" "$BIN"
+# espflash flash --monitor --chip "$CHIP" --port "$PORT" "$BIN"

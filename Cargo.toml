@@ -1,0 +1,25 @@
+[package]
+name = "env-mon-display"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+[dependencies]
+bme280 = "0.5"
+embedded-graphics = "0.8"
+embedded-hal = "1.0"
+embedded-hal-bus = "0.3"
+epd-waveshare = { version = "0.6", default-features = false, features = ["graphics", "epd2in13_v3"] }
+esp-bootloader-esp-idf = { version = "0.4", features = ["esp32"] }
+esp-hal = { version = "1.0", features = ["esp32", "unstable"] }
+esp-println = { version = "0.16", features = ["esp32"] }
+heapless = "0.8"
+panic-halt = "1.0"
+static_cell = "2.1"
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true
+opt-level = "z"

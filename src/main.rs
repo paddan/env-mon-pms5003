@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+mod air_quality;
 mod bme280;
 mod display;
 mod pms5003;
@@ -30,37 +31,13 @@ use panic_halt as _;
 use crate::{
     bme280::{detect_bme_address, BmeReading},
     display::{clear_tft, render_tft, DisplayCache},
-    pms5003::{write_all, PmsParser, PMS_ACTIVE_MODE_CMD, PMS_WAKE_CMD},
+    pms5003::{send_pms_command, PmsParser, PMS_ACTIVE_MODE_CMD, PMS_WAKE_CMD},
 };
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
 const BME_MEASURE_INTERVAL: Duration = Duration::from_secs(5);
 const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
-
-fn send_pms_command(
-    uart: &mut Uart<'_, esp_hal::Blocking>,
-    delay: &mut Delay,
-    command: &[u8],
-    command_name: &str,
-) -> bool {
-    for attempt in 1..=3 {
-        match write_all(uart, command) {
-            Ok(()) => {
-                println!("PMS command sent: {} (attempt {}/3)", command_name, attempt);
-                return true;
-            }
-            Err(_) => {
-                println!(
-                    "PMS command failed: {} (attempt {}/3)",
-                    command_name, attempt
-                );
-                delay.delay_millis(100);
-            }
-        }
-    }
-    false
-}
 
 #[main]
 fn main() -> ! {
@@ -97,22 +74,17 @@ fn main() -> ! {
         .with_sda(peripherals.GPIO6)
         .with_scl(peripherals.GPIO7);
 
-    let (bme_address, sensor_label) = match detect_bme_address(&mut i2c) {
+    let bme_address = match detect_bme_address(&mut i2c) {
         Some((address, chip_id)) => {
             println!(
                 "BME/BMP sensor detected at 0x{:02X}, chip id 0x{:02X}",
                 address, chip_id
             );
-            let label = if chip_id == 0x60 {
-                "BME280 active"
-            } else {
-                "BMP280 active (no humidity)"
-            };
-            (Some(address), Some(label))
+            Some(address)
         }
         None => {
             println!("No BME280/BMP280 detected on 0x76/0x77");
-            (None, Some("No BME280/BMP280 detected"))
+            None
         }
     };
 
@@ -167,7 +139,7 @@ fn main() -> ! {
 
     if let Some(display) = tft.as_mut() {
         clear_tft(display);
-        render_tft(display, &mut display_cache, None, latest_bme, sensor_label);
+        render_tft(display, &mut display_cache, None, latest_bme);
     }
 
     println!("Waiting for valid PMS5003 frames...");
@@ -251,13 +223,7 @@ fn main() -> ! {
         if display_dirty && last_display_refresh.elapsed() >= DISPLAY_REFRESH_INTERVAL {
             last_display_refresh = Instant::now();
             if let Some(display) = tft.as_mut() {
-                render_tft(
-                    display,
-                    &mut display_cache,
-                    latest_pms,
-                    latest_bme,
-                    sensor_label,
-                );
+                render_tft(display, &mut display_cache, latest_pms, latest_bme);
                 display_dirty = false;
             }
         }

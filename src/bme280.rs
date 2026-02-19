@@ -1,8 +1,5 @@
 use ::bme280::Measurements;
-use esp_hal::{
-    Blocking,
-    i2c::master::I2c,
-};
+use esp_hal::{i2c::master::I2c, Blocking};
 
 #[derive(Clone, Copy)]
 pub struct BmeReading {

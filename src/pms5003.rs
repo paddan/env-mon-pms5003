@@ -1,7 +1,9 @@
 use esp_hal::{
-    Blocking,
+    delay::Delay,
     uart::{TxError, Uart},
+    Blocking,
 };
+use esp_println::println;
 
 const PMS_FRAME_SIZE: usize = 32;
 const PMS_START_1: u8 = 0x42;
@@ -129,4 +131,28 @@ pub fn write_all(uart: &mut Uart<'_, Blocking>, buf: &[u8]) -> Result<(), TxErro
     }
     uart.flush()?;
     Ok(())
+}
+
+pub fn send_pms_command(
+    uart: &mut Uart<'_, Blocking>,
+    delay: &mut Delay,
+    command: &[u8],
+    command_name: &str,
+) -> bool {
+    for attempt in 1..=3 {
+        match write_all(uart, command) {
+            Ok(()) => {
+                println!("PMS command sent: {} (attempt {}/3)", command_name, attempt);
+                return true;
+            }
+            Err(_) => {
+                println!(
+                    "PMS command failed: {} (attempt {}/3)",
+                    command_name, attempt
+                );
+                delay.delay_millis(100);
+            }
+        }
+    }
+    false
 }

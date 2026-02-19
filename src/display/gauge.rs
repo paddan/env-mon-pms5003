@@ -24,11 +24,20 @@ pub(super) fn update_status_if_changed<D>(
         return;
     }
 
-    if let Some(prev_pm25) = cache.status_pm25 {
-        let ratio = status_ratio(prev_pm25);
-        let angle = gauge_angle(ratio);
-        erase_status_needle(display, angle);
-        restore_gauge_slice(display, angle);
+    let prev_angle = cache.status_pm25.map(|v| gauge_angle(status_ratio(v)));
+    let next_angle = pm25.map(|v| gauge_angle(status_ratio(v)));
+    let redraw_threshold = GAUGE_NEEDLE_MIN_REDRAW_DEG.max(0.0);
+    let should_redraw_needle = match (prev_angle, next_angle) {
+        (Some(prev), Some(next)) => (next - prev).abs() >= redraw_threshold,
+        (None, None) => false,
+        _ => true,
+    };
+
+    if should_redraw_needle {
+        if let Some(angle) = prev_angle {
+            erase_status_needle(display, angle);
+            restore_gauge_slice(display, angle);
+        }
     }
 
     let value_style = TextStyleCfg {
@@ -41,10 +50,10 @@ pub(super) fn update_status_if_changed<D>(
     let text_pos = centered_status_text_pos(font, text);
     draw_text_aa(display, text_pos, font, value_style.color, text);
 
-    if let Some(current_pm25) = pm25 {
-        let ratio = status_ratio(current_pm25);
-        let angle = gauge_angle(ratio);
-        draw_status_needle(display, angle);
+    if should_redraw_needle {
+        if let Some(angle) = next_angle {
+            draw_status_needle(display, angle);
+        }
     }
 
     cache.status_text.clear();
@@ -109,6 +118,11 @@ fn draw_status_needle<D>(display: &mut D, angle_deg: f32)
 where
     D: DrawTarget<Color = DisplayColor>,
 {
+    if GAUGE_NEEDLE_FAST_MODE {
+        draw_status_needle_fast(display, angle_deg);
+        return;
+    }
+
     let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
     let outer_r = pointer_outer_radius(inner_r);
     let arrow_len = gauge_scale_i32(GAUGE_ARROW_LEN_BASE);
@@ -166,6 +180,11 @@ fn erase_status_needle<D>(display: &mut D, angle_deg: f32)
 where
     D: DrawTarget<Color = DisplayColor>,
 {
+    if GAUGE_NEEDLE_FAST_MODE {
+        erase_status_needle_fast(display, angle_deg);
+        return;
+    }
+
     let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
     let outer_r = pointer_outer_radius(inner_r);
     let clear_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_CLEAR_PAD_BASE);
@@ -188,6 +207,92 @@ where
     );
 
     fill_triangle_aa(display, tip, left, right, BG_COLOR);
+
+    let _ = Circle::with_center(
+        GAUGE_CENTER,
+        gauge_scale_u32_nonzero(GAUGE_HUB_CLEAR_D_BASE),
+    )
+    .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
+    .draw(display);
+}
+
+fn draw_status_needle_fast<D>(display: &mut D, angle_deg: f32)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
+    let outer_r = pointer_outer_radius(inner_r);
+    let arrow_len = gauge_scale_i32(GAUGE_ARROW_LEN_BASE);
+    let arrow_half_w = gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE);
+    let arrow_tip_offset = gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE);
+    let shadow_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_SHADOW_PAD_BASE);
+
+    let (start, shaft_end, tip, left, right) = needle_geometry(
+        angle_deg,
+        inner_r,
+        outer_r,
+        arrow_len,
+        arrow_half_w,
+        arrow_tip_offset,
+    );
+    let (_, _, shadow_tip, shadow_left, shadow_right) = needle_geometry(
+        angle_deg,
+        inner_r,
+        outer_r,
+        arrow_len + shadow_pad,
+        arrow_half_w + shadow_pad,
+        arrow_tip_offset + shadow_pad,
+    );
+
+    let shadow_w = gauge_scale_i32_nonzero(GAUGE_NEEDLE_SHADOW_W_BASE) as u32;
+    let needle_w = gauge_scale_i32_nonzero(GAUGE_NEEDLE_W_BASE) as u32;
+
+    let _ = Line::new(start, shaft_end)
+        .into_styled(PrimitiveStyle::with_stroke(
+            GAUGE_NEEDLE_SHADOW_COLOR,
+            shadow_w,
+        ))
+        .draw(display);
+    let _ = Triangle::new(shadow_tip, shadow_left, shadow_right)
+        .into_styled(PrimitiveStyle::with_fill(GAUGE_NEEDLE_SHADOW_COLOR))
+        .draw(display);
+
+    let _ = Line::new(start, shaft_end)
+        .into_styled(PrimitiveStyle::with_stroke(GAUGE_NEEDLE_COLOR, needle_w))
+        .draw(display);
+    let _ = Triangle::new(tip, left, right)
+        .into_styled(PrimitiveStyle::with_fill(GAUGE_NEEDLE_COLOR))
+        .draw(display);
+
+    let _ = Circle::with_center(GAUGE_CENTER, gauge_scale_u32_nonzero(GAUGE_HUB_D_BASE))
+        .into_styled(PrimitiveStyle::with_fill(GAUGE_HUB_COLOR))
+        .draw(display);
+}
+
+fn erase_status_needle_fast<D>(display: &mut D, angle_deg: f32)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
+    let outer_r = pointer_outer_radius(inner_r);
+    let clear_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_CLEAR_PAD_BASE);
+
+    let (start, _, tip, left, right) = needle_geometry(
+        angle_deg,
+        inner_r,
+        outer_r,
+        gauge_scale_i32(GAUGE_ARROW_LEN_BASE) + clear_pad,
+        gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE) + clear_pad,
+        gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE) + clear_pad,
+    );
+
+    let clear_w = gauge_scale_i32_nonzero(GAUGE_NEEDLE_CLEAR_W_BASE) as u32;
+    let _ = Line::new(start, tip)
+        .into_styled(PrimitiveStyle::with_stroke(BG_COLOR, clear_w))
+        .draw(display);
+    let _ = Triangle::new(tip, left, right)
+        .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
+        .draw(display);
 
     let _ = Circle::with_center(
         GAUGE_CENTER,

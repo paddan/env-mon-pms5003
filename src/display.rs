@@ -4,7 +4,7 @@ use embedded_graphics::{
     geometry::AngleUnit,
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle},
+    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle, Triangle},
 };
 use heapless::String;
 use micromath::F32Ext;
@@ -160,6 +160,8 @@ const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
 const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
 const GAUGE_ARROW_SHADOW_PAD_BASE: i32 = 1;
 const GAUGE_ARROW_CLEAR_PAD_BASE: i32 = 2;
+const GAUGE_NEEDLE_FAST_MODE: bool = false;
+const GAUGE_NEEDLE_MIN_REDRAW_DEG: f32 = 2.0;
 
 #[derive(Copy, Clone)]
 struct GaugeSegmentCfg {

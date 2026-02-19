@@ -68,13 +68,13 @@ fn main() -> ! {
     let mut delay = Delay::new();
 
     let uart_config = UartConfig::default().with_baudrate(9_600);
-    let mut pms_uart = Uart::new(peripherals.UART2, uart_config)
-        .expect("Failed to initialize UART2")
-        .with_rx(peripherals.GPIO16)
-        .with_tx(peripherals.GPIO17);
+    let mut pms_uart = Uart::new(peripherals.UART1, uart_config)
+        .expect("Failed to initialize UART1")
+        .with_rx(peripherals.GPIO4)
+        .with_tx(peripherals.GPIO5);
 
     println!("PMS5003 reader started");
-    println!("PMS UART: UART2 RX=GPIO16 TX=GPIO17 @9600");
+    println!("PMS UART: UART1 RX=GPIO4 TX=GPIO5 @9600");
 
     let wake_ok = send_pms_command(&mut pms_uart, &mut delay, &PMS_WAKE_CMD, "wake");
     delay.delay_millis(1500);
@@ -92,8 +92,8 @@ fn main() -> ! {
     let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(100));
     let mut i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("Failed to initialize I2C0")
-        .with_sda(peripherals.GPIO21)
-        .with_scl(peripherals.GPIO22);
+        .with_sda(peripherals.GPIO6)
+        .with_scl(peripherals.GPIO7);
 
     let (bme_address, sensor_label) = match detect_bme_address(&mut i2c) {
         Some((address, chip_id)) => {
@@ -132,13 +132,13 @@ fn main() -> ! {
         .with_mode(HalSpiMode::_0);
     let spi_bus = Spi::new(peripherals.SPI2, spi_config)
         .expect("Failed to initialize SPI2")
-        .with_sck(peripherals.GPIO18)
-        .with_mosi(peripherals.GPIO23);
+        .with_sck(peripherals.GPIO8)
+        .with_mosi(peripherals.GPIO10);
 
-    let epd_cs = Output::new(peripherals.GPIO5, Level::High, OutputConfig::default());
-    let epd_dc = Output::new(peripherals.GPIO27, Level::Low, OutputConfig::default());
-    let epd_rst = Output::new(peripherals.GPIO26, Level::High, OutputConfig::default());
-    let epd_busy = Input::new(peripherals.GPIO25, InputConfig::default());
+    let epd_cs = Output::new(peripherals.GPIO3, Level::High, OutputConfig::default());
+    let epd_dc = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
+    let epd_rst = Output::new(peripherals.GPIO1, Level::High, OutputConfig::default());
+    let epd_busy = Input::new(peripherals.GPIO0, InputConfig::default());
 
     let mut epd_spi =
         ExclusiveDevice::new_no_delay(spi_bus, epd_cs).expect("Failed to create SPI device");
@@ -244,7 +244,11 @@ fn main() -> ! {
                         }
                         latest_bme = Some(reading);
                         display_dirty = true;
-                        let temp_sign = if reading.temperature_c_x10 < 0 { '-' } else { ' ' };
+                        let temp_sign = if reading.temperature_c_x10 < 0 {
+                            "-"
+                        } else {
+                            ""
+                        };
                         let temp_abs = reading.temperature_c_x10.unsigned_abs();
                         println!(
                             "BME: T={}{}.{:01}C RH={}.{:01}% P={}Pa",

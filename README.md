@@ -1,37 +1,37 @@
-# FireBeetle ESP32 + PMS5003 + BME280 + 2.66in e-paper (Rust)
+# ESP32-C3 Super Mini + PMS5003 + BME280 + 2.66in e-paper (Rust)
 
-`no_std` ESP32 firmware using:
+`no_std` ESP32-C3 firmware using:
 
-- `PMS5003` over UART2 for PM readings
+- `PMS5003` over UART1 for PM readings
 - `BME280` over I2C for temperature, humidity, pressure
 - `Waveshare 2.66" e-paper` over SPI for on-device display
 
 ## Clear Wiring Diagram
 
-FireBeetle ESP32 side:
+ESP32-C3 Super Mini side:
 
-| FireBeetle pin | Connects to                                | Notes                           |
+| ESP32-C3 pin | Connects to                                  | Notes                           |
 |:---------------|:-------------------------------------------|:--------------------------------|
 | `5V`           | PMS5003 `VCC`                              | PMS5003 power (5V)              |
 | `GND`          | PMS5003 `GND`, BME280 `GND`, e-paper `GND` | Shared ground                   |
-| `GPIO16`       | PMS5003 `TXD`                              | UART2 RX                        |
-| `GPIO17`       | PMS5003 `RXD`                              | UART2 TX (wake/active commands) |
+| `GPIO4`        | PMS5003 `TXD`                              | UART1 RX                        |
+| `GPIO5`        | PMS5003 `RXD`                              | UART1 TX (wake/active commands) |
 | `3V3`          | BME280 `VIN/VCC`, e-paper `VCC`            | 3.3V rail                       |
-| `GPIO21`       | BME280 `SDA`                               | I2C SDA                         |
-| `GPIO22`       | BME280 `SCL`                               | I2C SCL                         |
-| `GPIO23`       | e-paper `DIN`                              | SPI MOSI                        |
-| `GPIO18`       | e-paper `CLK`                              | SPI SCK                         |
-| `GPIO5`        | e-paper `CS`                               | SPI chip select                 |
-| `GPIO27`       | e-paper `DC`                               | Data/command                    |
-| `GPIO26`       | e-paper `RST`                              | Display reset                   |
-| `GPIO25`       | e-paper `BUSY`                             | Display busy input              |
+| `GPIO6`        | BME280 `SDA`                               | I2C SDA                         |
+| `GPIO7`        | BME280 `SCL`                               | I2C SCL                         |
+| `GPIO10`       | e-paper `DIN`                              | SPI MOSI                        |
+| `GPIO8`        | e-paper `CLK`                              | SPI SCK                         |
+| `GPIO3`        | e-paper `CS`                               | SPI chip select                 |
+| `GPIO2`        | e-paper `DC`                               | Data/command                    |
+| `GPIO1`        | e-paper `RST`                              | Display reset                   |
+| `GPIO0`        | e-paper `BUSY`                             | Display busy input              |
 
 ### PMS5003 8-pin connector mapping (sensor-side)
 
-- `PIN1 VCC` -> FireBeetle `5V`
-- `PIN2 GND` -> FireBeetle `GND`
-- `PIN4 RX` -> FireBeetle `GPIO17` (optional but recommended)
-- `PIN5 TX` -> FireBeetle `GPIO16`
+- `PIN1 VCC` -> ESP32-C3 Super Mini `5V`
+- `PIN2 GND` -> ESP32-C3 Super Mini `GND`
+- `PIN4 RX` -> ESP32-C3 Super Mini `GPIO5` (optional but recommended)
+- `PIN5 TX` -> ESP32-C3 Super Mini `GPIO4`
 - `PIN3 SET`, `PIN6 RESET`, `PIN7/8 NC` -> leave unconnected
 
 ### BME280 notes

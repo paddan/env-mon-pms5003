@@ -1,12 +1,11 @@
 [build]
-target = "xtensa-esp32-none-elf"
+target = "riscv32imc-unknown-none-elf"
 
 [unstable]
 build-std = ["core"]
 
-[target.xtensa-esp32-none-elf]
+[target.riscv32imc-unknown-none-elf]
 runner = "espflash flash --monitor"
-rustflags = ["-C", "link-arg=-nostartfiles"]
 
 [env]
-MCU = "esp32"
+MCU = "esp32c3"

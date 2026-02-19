@@ -2,8 +2,8 @@ use core::fmt::Write as _;
 
 use embedded_graphics::{
     mono_font::{
-        MonoTextStyleBuilder,
         ascii::{FONT_6X10, FONT_7X13_BOLD},
+        MonoTextStyleBuilder,
     },
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
@@ -80,10 +80,16 @@ fn draw_display(
     let mut hum_text: String<12> = String::new();
     let mut pressure_text: String<14> = String::new();
     if let Some(reading) = bme {
-        let temp_sign = if reading.temperature_c_x10 < 0 { '-' } else { ' ' };
+        let temp_sign = if reading.temperature_c_x10 < 0 { "-" } else { "" };
         let temp_abs = reading.temperature_c_x10.unsigned_abs();
         let pressure_hpa_x10 = reading.pressure_pa / 10;
-        let _ = write!(temp_text, "{}{}.{:01} C", temp_sign, temp_abs / 10, temp_abs % 10);
+        let _ = write!(
+            temp_text,
+            "{}{}.{:01} C",
+            temp_sign,
+            temp_abs / 10,
+            temp_abs % 10
+        );
         let _ = write!(
             hum_text,
             "{}.{:01} %",
@@ -141,7 +147,7 @@ fn draw_display(
     draw_line_big(
         display,
         96,
-        16,
+        20,
         TriColor::Black,
         format_args!("{:>13}: {}", "Temperatur", temp_text),
     );

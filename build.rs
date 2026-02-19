@@ -1,4 +1,4 @@
 fn main() {
-    // Required linker script for xtensa esp-hal targets.
-    println!("cargo:rustc-link-arg=-Wl,-Tlinkall.x");
+    // Required linker script for esp-hal targets.
+    println!("cargo:rustc-link-arg=-Tlinkall.x");
 }

@@ -7,31 +7,36 @@ mod pms5003;
 
 use ::bme280::i2c::BME280;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use epd_waveshare::prelude::WaveshareDisplay;
 use esp_hal::{
     clock::CpuClock,
     delay::Delay,
-    gpio::{Input, InputConfig, Level, Output, OutputConfig},
+    gpio::{Level, Output, OutputConfig},
     i2c::master::{Config as I2cConfig, I2c},
     main,
-    spi::Mode as HalSpiMode,
     spi::master::{Config as SpiConfig, Spi},
+    spi::Mode as HalSpiMode,
     time::{Duration, Instant, Rate},
     uart::{Config as UartConfig, RxError, Uart},
 };
 use esp_println::println;
+use mipidsi::{
+    interface::SpiInterface,
+    models::ILI9341Rgb565,
+    options::{ColorOrder, Orientation},
+    Builder,
+};
 use panic_halt as _;
 
 use crate::{
-    bme280::{BmeReading, detect_bme_address},
-    display::{Epd2in66b, init_display_buffer, refresh_epaper},
-    pms5003::{PMS_ACTIVE_MODE_CMD, PMS_WAKE_CMD, PmsParser, write_all},
+    bme280::{detect_bme_address, BmeReading},
+    display::{clear_tft, render_tft, DisplayCache},
+    pms5003::{write_all, PmsParser, PMS_ACTIVE_MODE_CMD, PMS_WAKE_CMD},
 };
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
 const BME_MEASURE_INTERVAL: Duration = Duration::from_secs(5);
-const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 fn send_pms_command(
     uart: &mut Uart<'_, esp_hal::Blocking>,
@@ -42,10 +47,7 @@ fn send_pms_command(
     for attempt in 1..=3 {
         match write_all(uart, command) {
             Ok(()) => {
-                println!(
-                    "PMS command sent: {} (attempt {}/3)",
-                    command_name, attempt
-                );
+                println!("PMS command sent: {} (attempt {}/3)", command_name, attempt);
                 return true;
             }
             Err(_) => {
@@ -128,55 +130,44 @@ fn main() -> ! {
     }
 
     let spi_config = SpiConfig::default()
-        .with_frequency(Rate::from_mhz(4))
+        .with_frequency(Rate::from_mhz(8))
         .with_mode(HalSpiMode::_0);
     let spi_bus = Spi::new(peripherals.SPI2, spi_config)
         .expect("Failed to initialize SPI2")
         .with_sck(peripherals.GPIO8)
         .with_mosi(peripherals.GPIO10);
 
-    let epd_cs = Output::new(peripherals.GPIO3, Level::High, OutputConfig::default());
-    let epd_dc = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
-    let epd_rst = Output::new(peripherals.GPIO1, Level::High, OutputConfig::default());
-    let epd_busy = Input::new(peripherals.GPIO0, InputConfig::default());
+    let tft_cs = Output::new(peripherals.GPIO3, Level::High, OutputConfig::default());
+    let tft_dc = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
+    let tft_rst = Output::new(peripherals.GPIO1, Level::High, OutputConfig::default());
+    let _tft_led = Output::new(peripherals.GPIO0, Level::High, OutputConfig::default());
 
-    let mut epd_spi =
-        ExclusiveDevice::new_no_delay(spi_bus, epd_cs).expect("Failed to create SPI device");
+    let tft_spi =
+        ExclusiveDevice::new_no_delay(spi_bus, tft_cs).expect("Failed to create SPI device");
+    let mut tft_buf = [0u8; 512];
+    let tft_di = SpiInterface::new(tft_spi, tft_dc, &mut tft_buf);
 
-    let mut epd = match Epd2in66b::new(&mut epd_spi, epd_busy, epd_dc, epd_rst, &mut delay, None)
+    let mut tft = match Builder::new(ILI9341Rgb565, tft_di)
+        .reset_pin(tft_rst)
+        .display_size(240, 320)
+        .orientation(Orientation::new().flip_horizontal())
+        .color_order(ColorOrder::Bgr)
+        .init(&mut delay)
     {
-        Ok(epd) => {
-            println!("2.66in e-paper initialized");
-            Some(epd)
+        Ok(display) => {
+            println!("2.8in TFT initialized (ILI9341)");
+            Some(display)
         }
-        Err(_) => {
-            println!("2.66in e-paper init failed");
+        Err(err) => {
+            println!("2.8in TFT init failed: {:?}", err);
             None
         }
     };
+    let mut display_cache = DisplayCache::new();
 
-    let display = init_display_buffer();
-
-    let mut initial_display_refresh_ok = false;
-    if let Some(epd) = epd.as_mut() {
-        if refresh_epaper(
-            epd,
-            &mut epd_spi,
-            &mut delay,
-            display,
-            None,
-            latest_bme,
-            sensor_label,
-        )
-        .is_err()
-        {
-            println!("Initial e-paper refresh failed");
-        } else {
-            initial_display_refresh_ok = true;
-        }
-        if epd.sleep(&mut epd_spi, &mut delay).is_err() {
-            println!("E-paper sleep failed");
-        }
+    if let Some(display) = tft.as_mut() {
+        clear_tft(display);
+        render_tft(display, &mut display_cache, None, latest_bme, sensor_label);
     }
 
     println!("Waiting for valid PMS5003 frames...");
@@ -187,12 +178,8 @@ fn main() -> ! {
 
     let mut latest_pms = None;
     let mut last_bme_measure = Instant::now() - BME_MEASURE_INTERVAL;
-    let mut last_display_refresh = if initial_display_refresh_ok {
-        Instant::now()
-    } else {
-        Instant::now() - DISPLAY_REFRESH_INTERVAL
-    };
-    let mut display_dirty = !initial_display_refresh_ok;
+    let mut last_display_refresh = Instant::now() - DISPLAY_REFRESH_INTERVAL;
+    let mut display_dirty = true;
 
     loop {
         match pms_uart.read_buffered(&mut rx_buf) {
@@ -206,9 +193,6 @@ fn main() -> ! {
             Ok(count) => {
                 no_data_polls = 0;
                 if let Some(reading) = pms_parser.process_chunk(&rx_buf[..count]) {
-                    if latest_pms.is_none() {
-                        last_display_refresh = Instant::now() - DISPLAY_REFRESH_INTERVAL;
-                    }
                     latest_pms = Some(reading);
                     display_dirty = true;
                     println!(
@@ -239,9 +223,6 @@ fn main() -> ! {
                 match sensor.measure(&mut delay) {
                     Ok(measurements) => {
                         let reading = BmeReading::from_measurements(&measurements);
-                        if latest_bme.is_none() {
-                            last_display_refresh = Instant::now() - DISPLAY_REFRESH_INTERVAL;
-                        }
                         latest_bme = Some(reading);
                         display_dirty = true;
                         let temp_sign = if reading.temperature_c_x10 < 0 {
@@ -269,27 +250,15 @@ fn main() -> ! {
 
         if display_dirty && last_display_refresh.elapsed() >= DISPLAY_REFRESH_INTERVAL {
             last_display_refresh = Instant::now();
-            if let Some(epd) = epd.as_mut() {
-                if epd.wake_up(&mut epd_spi, &mut delay).is_err() {
-                    println!("E-paper wake failed");
-                } else if refresh_epaper(
-                    epd,
-                    &mut epd_spi,
-                    &mut delay,
+            if let Some(display) = tft.as_mut() {
+                render_tft(
                     display,
+                    &mut display_cache,
                     latest_pms,
                     latest_bme,
                     sensor_label,
-                )
-                .is_err()
-                {
-                    println!("E-paper refresh failed");
-                } else {
-                    display_dirty = false;
-                }
-                if epd.sleep(&mut epd_spi, &mut delay).is_err() {
-                    println!("E-paper sleep failed");
-                }
+                );
+                display_dirty = false;
             }
         }
 

@@ -15,12 +15,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b7e4c2464d97fe331d41de9d5db0def0a96f4d823b8b32a2efd503578988973"
 
 [[package]]
-name = "bit_field"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e4b40c7323adcfc0a41c4b88143ed58346ff65a288fc144329c5c45e05d70c6"
-
-[[package]]
 name = "bitfield"
 version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -388,24 +382,13 @@ dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
  "embedded-hal-bus",
- "epd-waveshare",
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
  "heapless",
+ "micromath",
+ "mipidsi",
  "panic-halt",
- "static_cell",
-]
-
-[[package]]
-name = "epd-waveshare"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5080903b18a41a89d1dfe07cd5d7f800165ed4dcdf0513b770f83c1e4750150c"
-dependencies = [
- "bit_field",
- "embedded-graphics-core",
- "embedded-hal 1.0.0",
 ]
 
 [[package]]
@@ -866,6 +849,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
 
 [[package]]
+name = "mipidsi"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790ebd28bd67addbccf41b1c0c188c26bb9f5bdcd91d4d6da9bd558e20d97a1d"
+dependencies = [
+ "embedded-graphics-core",
+ "embedded-hal 1.0.0",
+ "heapless",
+]
+
+[[package]]
 name = "nb"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1123,15 +1117,6 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
-
-[[package]]
-name = "static_cell"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0530892bb4fa575ee0da4b86f86c667132a94b74bb72160f58ee5a4afec74c23"
-dependencies = [
- "portable-atomic",
-]
 
 [[package]]
 name = "strsim"

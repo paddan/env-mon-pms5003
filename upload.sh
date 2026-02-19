@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT="/dev/cu.usbmodem2101"
+PORT="/dev/cu.usbmodem1101"
 CHIP="esp32c3"
 TARGET="riscv32imc-unknown-none-elf"
 BIN="target/${TARGET}/release/env-mon-display"

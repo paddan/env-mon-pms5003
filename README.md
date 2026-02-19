@@ -1,30 +1,36 @@
-# ESP32-C3 Super Mini + PMS5003 + BME280 + 2.66in e-paper (Rust)
+# ESP32-C3 Super Mini + PMS5003 + BME280 + 2.8in TFT (Rust)
 
 `no_std` ESP32-C3 firmware using:
 
 - `PMS5003` over UART1 for PM readings
 - `BME280` over I2C for temperature, humidity, pressure
-- `Waveshare 2.66" e-paper` over SPI for on-device display
+- `2.8" SPI TFT 240x320` (ILI9341-compatible) over SPI for on-device display
 
 ## Clear Wiring Diagram
 
 ESP32-C3 Super Mini side:
 
-| ESP32-C3 pin | Connects to                                  | Notes                           |
-|:---------------|:-------------------------------------------|:--------------------------------|
-| `5V`           | PMS5003 `VCC`                              | PMS5003 power (5V)              |
-| `GND`          | PMS5003 `GND`, BME280 `GND`, e-paper `GND` | Shared ground                   |
-| `GPIO4`        | PMS5003 `TXD`                              | UART1 RX                        |
-| `GPIO5`        | PMS5003 `RXD`                              | UART1 TX (wake/active commands) |
-| `3V3`          | BME280 `VIN/VCC`, e-paper `VCC`            | 3.3V rail                       |
-| `GPIO6`        | BME280 `SDA`                               | I2C SDA                         |
-| `GPIO7`        | BME280 `SCL`                               | I2C SCL                         |
-| `GPIO10`       | e-paper `DIN`                              | SPI MOSI                        |
-| `GPIO8`        | e-paper `CLK`                              | SPI SCK                         |
-| `GPIO3`        | e-paper `CS`                               | SPI chip select                 |
-| `GPIO2`        | e-paper `DC`                               | Data/command                    |
-| `GPIO1`        | e-paper `RST`                              | Display reset                   |
-| `GPIO0`        | e-paper `BUSY`                             | Display busy input              |
+| ESP32-C3 pin | Connects to                              | Notes                           |
+|:---------------|:---------------------------------------|:--------------------------------|
+| `5V`           | PMS5003 `VCC`                          | PMS5003 power (5V)              |
+| `GND`          | PMS5003 `GND`, BME280 `GND`, TFT `GND` | Shared ground                   |
+| `GPIO4`        | PMS5003 `TXD`                          | UART1 RX                        |
+| `GPIO5`        | PMS5003 `RXD`                          | UART1 TX (wake/active commands) |
+| `3V3`          | BME280 `VIN/VCC`, TFT `VCC`            | 3.3V rail                       |
+| `GPIO6`        | BME280 `SDA`                           | I2C SDA                         |
+| `GPIO7`        | BME280 `SCL`                           | I2C SCL                         |
+| `GPIO10`       | TFT `SDI(MOSI)`                        | SPI MOSI                        |
+| `GPIO8`        | TFT `SCK`                              | SPI SCK                         |
+| `GPIO3`        | TFT `CS`                               | SPI chip select                 |
+| `GPIO2`        | TFT `DC`                               | Data/command                    |
+| `GPIO1`        | TFT `RESET`                            | Display reset                   |
+| `GPIO0`        | TFT `LED`                              | Backlight enable (active high)  |
+
+### TFT module pins not used by firmware
+
+- `SDO(MISO)` (display readback)
+- `T_CLK`, `T_CS`, `T_DIN`, `T_DO`, `T_IRQ` (touch controller)
+- SD-card pins (`SD_CS`, `SD_MOSI`, `SD_MISO`, `SD_SCK`)
 
 ### PMS5003 8-pin connector mapping (sensor-side)
 
@@ -43,7 +49,7 @@ ESP32-C3 Super Mini side:
 
 - Continuously reads and validates PMS5003 frames.
 - Samples BME/BMP every 5 seconds.
-- Refreshes the e-paper at most every 60 seconds when data changes:
+- Redraws the TFT at most every 2 seconds when data changes:
   - PM1.0 / PM2.5 / PM10 (ATM)
   - Particle counts (0.3, 0.5um bins)
   - Temperature, humidity, pressure

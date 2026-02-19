@@ -44,9 +44,9 @@ FireBeetle ESP32 side:
 - Continuously reads and validates PMS5003 frames.
 - Samples BME/BMP every 5 seconds.
 - Refreshes the e-paper at most every 60 seconds when data changes:
-    - PM1.0 / PM2.5 / PM10 (ATM)
-    - Particle counts (0.3, 0.5um bins)
-    - Temperature, humidity, pressure
+  - PM1.0 / PM2.5 / PM10 (ATM)
+  - Particle counts (0.3, 0.5um bins)
+  - Temperature, humidity, pressure
 
 ## Toolchain setup (once)
 
@@ -56,12 +56,9 @@ espup install
 cargo +stable install espflash --locked
 ```
 
-Your shell already sources `export-esp.sh` from `.zshrc`.
-
 ## Build
 
 ```bash
-cd /Users/patrik/projects/firebeetle-pms5003
 cargo build
 ```
 
@@ -70,6 +67,5 @@ cargo build
 Use the upload script for your serial port:
 
 ```bash
-cd /Users/patrik/projects/firebeetle-pms5003
 ./upload.sh
 ```

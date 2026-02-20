@@ -33,12 +33,12 @@ pub fn band_from_pm25(pm25: u16) -> EuAqiBand {
 
 pub fn level_text_sv(pm25: Option<u16>) -> &'static str {
     match pm25.map(band_from_pm25) {
-        Some(EuAqiBand::Good) => "BRA NIVÅ",
-        Some(EuAqiBand::Fair) => "GODTAGBAR",
+        Some(EuAqiBand::Good) => "GOD",
+        Some(EuAqiBand::Fair) => "GANSKA GOD",
         Some(EuAqiBand::Moderate) => "MÅTTLIG",
         Some(EuAqiBand::Poor) => "DÅLIG",
         Some(EuAqiBand::VeryPoor) => "MYCKET DÅLIG",
-        Some(EuAqiBand::ExtremelyPoor) => "EXTREMT DÅLIG",
+        Some(EuAqiBand::ExtremelyPoor) => "YTTERST DÅLIG",
         None => "INGEN DATA",
     }
 }

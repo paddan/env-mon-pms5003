@@ -6,8 +6,8 @@ use u8g2_fonts::{
 };
 
 use super::{
-    DisplayColor, FontToken, ResolvedFont, U8g2FontToken, GAUGE_CENTER, STATUS_TEXT_CLEAR_PAD_X,
-    STATUS_TEXT_CLEAR_PAD_Y, STATUS_TEXT_GAP_Y, STATUS_TEXT_MAX_CHARS,
+    DisplayColor, FontToken, ResolvedFont, U8g2FontToken, GAUGE_CENTER, STATUS_TEXT_CLEAR_PAD_BOTTOM,
+    STATUS_TEXT_CLEAR_PAD_TOP, STATUS_TEXT_CLEAR_PAD_X, STATUS_TEXT_GAP_Y, STATUS_TEXT_MAX_CHARS,
 };
 
 // Single source of truth for token -> concrete u8g2 font mapping.
@@ -63,10 +63,9 @@ pub(super) fn status_text_clear_rect(font: ResolvedFont) -> Rectangle {
     let (text_y_offset, text_h) = status_text_bbox_metrics(font);
 
     let w = (text_w + STATUS_TEXT_CLEAR_PAD_X * 2).max(0) as u32;
-    let h = (text_h + STATUS_TEXT_CLEAR_PAD_Y * 2).max(0) as u32;
+    let h = (text_h + STATUS_TEXT_CLEAR_PAD_TOP + STATUS_TEXT_CLEAR_PAD_BOTTOM).max(0) as u32;
     let x = GAUGE_CENTER.x - (text_w / 2) - STATUS_TEXT_CLEAR_PAD_X;
-    let y =
-        GAUGE_CENTER.y + STATUS_TEXT_GAP_Y + text_y_offset - STATUS_TEXT_CLEAR_PAD_Y;
+    let y = GAUGE_CENTER.y + STATUS_TEXT_GAP_Y + text_y_offset - STATUS_TEXT_CLEAR_PAD_TOP;
 
     Rectangle::new(Point::new(x, y), Size::new(w, h))
 }
@@ -120,17 +119,24 @@ fn u8g2_font_height(font: U8g2FontToken) -> i32 {
 }
 
 fn u8g2_status_text_bbox_metrics(font: U8g2FontToken) -> (i32, i32) {
-    let dims = with_u8g2_font!(font, renderer, {
-        renderer.get_rendered_dimensions("Hgjy", Point::zero(), VerticalPosition::Top)
-    });
+    with_u8g2_font!(font, renderer, {
+        let sample_dims =
+            renderer.get_rendered_dimensions("ÅHgjy", Point::zero(), VerticalPosition::Top);
 
-    if let Ok(dims) = dims {
-        if let Some(bb) = dims.bounding_box {
-            return (bb.top_left.y, bb.size.height as i32);
+        if let Ok(sample_dims) = sample_dims {
+            if let Some(sample_bb) = sample_dims.bounding_box {
+                let sample_top = sample_bb.top_left.y;
+                let sample_bottom = sample_bb.top_left.y + sample_bb.size.height as i32;
+                let font_top = renderer.get_glyph_bounding_box(VerticalPosition::Top).top_left.y;
+                let top = sample_top.min(font_top);
+                return (top, (sample_bottom - top).max(1));
+            }
         }
-    }
 
-    (0, u8g2_font_height(font))
+        let fallback_h = renderer.get_default_line_height() as i32;
+        let fallback_top = renderer.get_glyph_bounding_box(VerticalPosition::Top).top_left.y;
+        (fallback_top, fallback_h.max(1))
+    })
 }
 
 fn status_text_bbox_metrics(font: ResolvedFont) -> (i32, i32) {

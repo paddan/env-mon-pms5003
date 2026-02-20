@@ -4,7 +4,8 @@ use super::{
 };
 
 pub(super) const CLIMATE_VALUE_GAP_Y: i32 = 1;
-const CLIMATE_VALUE_CLEAR_PAD_Y: i32 = -5;
+const CLIMATE_VALUE_CLEAR_PAD_TOP: i32 = 2;
+const CLIMATE_VALUE_CLEAR_PAD_BOTTOM: i32 = 0;
 pub(super) const CLIMATE_TEMP_VALUE_CLEAR_W: u32 = 72;
 pub(super) const CLIMATE_PRESSURE_VALUE_CLEAR_W: u32 = 92;
 pub(super) const CLIMATE_HUM_VALUE_CLEAR_W: u32 = 40;
@@ -128,8 +129,9 @@ pub(super) const FIELD_PM05: FieldCfg = FieldCfg {
 pub(super) fn climate_value_field(x: i32, clear_w: u32, style: TextStyleCfg) -> FieldCfg {
     let y = climate_value_y();
     let text_h = font_height(font_for(style.font));
-    let clear_y = y - CLIMATE_VALUE_CLEAR_PAD_Y;
-    let clear_h = (text_h + CLIMATE_VALUE_CLEAR_PAD_Y * 2).max(1) as u32;
+    let clear_y = y - CLIMATE_VALUE_CLEAR_PAD_TOP;
+    let clear_h = (text_h + CLIMATE_VALUE_CLEAR_PAD_TOP + CLIMATE_VALUE_CLEAR_PAD_BOTTOM).max(1)
+        as u32;
 
     FieldCfg {
         x,

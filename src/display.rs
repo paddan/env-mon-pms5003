@@ -133,7 +133,7 @@ const GAUGE_GRADIENT_STEP_DEG_RESTORE: f32 = 3.0;
 const GAUGE_COLOR_BLEND_SPAN_DEG: f32 = 30.0;
 
 const GAUGE_REF_DIAMETER: i32 = 190;
-const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.2;
+const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.15;
 const GAUGE_POINTER_MAX_EXTRA_R_BASE: i32 = 120;
 const GAUGE_RESTORE_SPAN_DEG: f32 = 7.0;
 const GAUGE_NEEDLE_INNER_R_BASE: i32 = 2;
@@ -148,7 +148,8 @@ const GAUGE_HUB_CLEAR_D_BASE: u32 = 12;
 const GAUGE_HUB_COLOR: DisplayColor = TEXT_WHITE;
 const STATUS_TEXT_GAP_Y: i32 = 16;
 const STATUS_TEXT_CLEAR_PAD_X: i32 = 2;
-const STATUS_TEXT_CLEAR_PAD_Y: i32 = 2;
+const STATUS_TEXT_CLEAR_PAD_TOP: i32 = 1;
+const STATUS_TEXT_CLEAR_PAD_BOTTOM: i32 = 0;
 const STATUS_TEXT_MAX_CHARS: i32 = 15;
 const GAUGE_ARROW_LEN_BASE: i32 = 11;
 const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
@@ -317,7 +318,7 @@ fn draw_dynamic<D>(
             temp_abs / 10,
             temp_abs % 10
         );
-        let _ = write!(hum_text, "{}%", humidity_pct);
+        let _ = write!(hum_text, "{} %", humidity_pct);
         let _ = write!(pressure_text, "{} hPa", pressure_hpa_x10 / 10);
     } else {
         let _ = temp_text.push_str("--.- C");

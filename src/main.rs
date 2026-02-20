@@ -76,14 +76,17 @@ fn main() -> ! {
 
     let bme_address = match detect_bme_address(&mut i2c) {
         Some((address, chip_id)) => {
-            println!(
-                "BME/BMP sensor detected at 0x{:02X}, chip id 0x{:02X}",
-                address, chip_id
-            );
+            if chip_id == 0x60 {
+                println!("BME280 detected at 0x{:02X} (chip id 0x60)", address);
+            } else if chip_id == 0x58 {
+                println!("BMP280 detected at 0x{:02X} (chip id 0x58)", address);
+                println!("BME280 not detected; humidity readings are not available.");
+            }
             Some(address)
         }
         None => {
-            println!("No BME280/BMP280 detected on 0x76/0x77");
+            println!("BME280 not detected on 0x76/0x77.");
+            println!("No BMP280 detected either.");
             None
         }
     };

@@ -37,11 +37,11 @@ use crate::{
 esp_bootloader_esp_idf::esp_app_desc!();
 
 const BME_MEASURE_INTERVAL: Duration = Duration::from_secs(5);
-const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
 
 #[main]
 fn main() -> ! {
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_80MHz);
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
     let mut delay = Delay::new();
@@ -102,7 +102,7 @@ fn main() -> ! {
     }
 
     let spi_config = SpiConfig::default()
-        .with_frequency(Rate::from_mhz(8))
+        .with_frequency(Rate::from_mhz(40))
         .with_mode(HalSpiMode::_0);
     let spi_bus = Spi::new(peripherals.SPI2, spi_config)
         .expect("Failed to initialize SPI2")
@@ -116,7 +116,7 @@ fn main() -> ! {
 
     let tft_spi =
         ExclusiveDevice::new_no_delay(spi_bus, tft_cs).expect("Failed to create SPI device");
-    let mut tft_buf = [0u8; 512];
+    let mut tft_buf = [0u8; 2048];
     let tft_di = SpiInterface::new(tft_spi, tft_dc, &mut tft_buf);
 
     let mut tft = match Builder::new(ILI9341Rgb565, tft_di)

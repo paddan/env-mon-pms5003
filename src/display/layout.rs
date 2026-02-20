@@ -1,6 +1,6 @@
 use super::{
-    font_for, font_height, TextStyleCfg, STYLE_CLIMATE_LABEL, STYLE_HEADER_TEXT,
-    STYLE_PARTICLE_LABEL, STYLE_PARTICLE_VALUE,
+    font_for, font_height, TextStyleCfg, STYLE_CLIMATE_LABEL, STYLE_PARTICLE_LABEL,
+    STYLE_PARTICLE_VALUE,
 };
 
 pub(super) const CLIMATE_VALUE_GAP_Y: i32 = 1;
@@ -79,15 +79,6 @@ pub(super) const LABEL_PM05: LabelCfg = LabelCfg {
 };
 
 // Dynamic fields by function
-pub(super) const FIELD_HEADER: FieldCfg = FieldCfg {
-    x: 8,
-    y: 178,
-    clear_x: 8,
-    clear_y: 158,
-    clear_w: 220,
-    clear_h: 12,
-    style: STYLE_HEADER_TEXT,
-};
 pub(super) const FIELD_PM1: FieldCfg = FieldCfg {
     x: 8,
     y: 224,

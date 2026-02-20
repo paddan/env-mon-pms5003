@@ -4,7 +4,7 @@ use embedded_graphics::{
     geometry::AngleUnit,
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle, Triangle},
+    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle},
 };
 use heapless::String;
 use micromath::F32Ext;
@@ -15,9 +15,9 @@ mod text;
 use gauge::{draw_gauge_scale, update_status_if_changed};
 use layout::{
     climate_value_field, FieldCfg, LabelCfg, CLIMATE_HUM_VALUE_CLEAR_W,
-    CLIMATE_PRESSURE_VALUE_CLEAR_W, CLIMATE_TEMP_VALUE_CLEAR_W, FIELD_HEADER, FIELD_PM03,
-    FIELD_PM05, FIELD_PM1, FIELD_PM10, FIELD_PM25, LABEL_PM03, LABEL_PM05, LABEL_PM1, LABEL_PM10,
-    LABEL_PM25, LABEL_PRESSURE, LABEL_RH, LABEL_TEMP,
+    CLIMATE_PRESSURE_VALUE_CLEAR_W, CLIMATE_TEMP_VALUE_CLEAR_W, FIELD_PM03, FIELD_PM05, FIELD_PM1,
+    FIELD_PM10, FIELD_PM25, LABEL_PM03, LABEL_PM05, LABEL_PM1, LABEL_PM10, LABEL_PM25,
+    LABEL_PRESSURE, LABEL_RH, LABEL_TEMP,
 };
 use text::{centered_status_text_pos, draw_text_aa, font_for, font_height, status_text_clear_rect};
 
@@ -85,11 +85,6 @@ enum ResolvedFont {
 }
 
 // Typography by function
-const STYLE_HEADER_TEXT: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Small,
-    color: TEXT_DIM,
-};
-
 const STYLE_CLIMATE_LABEL: TextStyleCfg = TextStyleCfg {
     font: FontToken::Medium,
     color: TEXT_DIM,
@@ -138,7 +133,7 @@ const GAUGE_GRADIENT_STEP_DEG_RESTORE: f32 = 3.0;
 const GAUGE_COLOR_BLEND_SPAN_DEG: f32 = 30.0;
 
 const GAUGE_REF_DIAMETER: i32 = 190;
-const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.0;
+const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.2;
 const GAUGE_POINTER_MAX_EXTRA_R_BASE: i32 = 120;
 const GAUGE_RESTORE_SPAN_DEG: f32 = 7.0;
 const GAUGE_NEEDLE_INNER_R_BASE: i32 = 2;
@@ -151,17 +146,17 @@ const GAUGE_NEEDLE_SHADOW_COLOR: DisplayColor = DisplayColor::new(5, 12, 5);
 const GAUGE_HUB_D_BASE: u32 = 10;
 const GAUGE_HUB_CLEAR_D_BASE: u32 = 12;
 const GAUGE_HUB_COLOR: DisplayColor = TEXT_WHITE;
-const STATUS_TEXT_GAP_Y: i32 = 20;
-const STATUS_TEXT_CLEAR_PAD_X: i32 = 4;
-const STATUS_TEXT_CLEAR_PAD_Y: i32 = 2;
+const STATUS_TEXT_GAP_Y: i32 = 16;
+const STATUS_TEXT_CLEAR_PAD_X: i32 = 2;
+const STATUS_TEXT_CLEAR_PAD_Y: i32 = 0;
 const STATUS_TEXT_MAX_CHARS: i32 = 15;
 const GAUGE_ARROW_LEN_BASE: i32 = 11;
 const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
 const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
 const GAUGE_ARROW_SHADOW_PAD_BASE: i32 = 1;
 const GAUGE_ARROW_CLEAR_PAD_BASE: i32 = 2;
-const GAUGE_NEEDLE_FAST_MODE: bool = false;
-const GAUGE_NEEDLE_MIN_REDRAW_DEG: f32 = 2.0;
+const GAUGE_NEEDLE_FAST_MODE: bool = true;
+const GAUGE_NEEDLE_MIN_REDRAW_DEG: f32 = 1.0;
 
 #[derive(Copy, Clone)]
 struct GaugeSegmentCfg {
@@ -199,7 +194,6 @@ const GAUGE_SEGMENTS: [GaugeSegmentCfg; 6] = [
 
 pub struct DisplayCache {
     static_layout_drawn: bool,
-    header: String<48>,
     temp: String<16>,
     hum: String<16>,
     pressure: String<16>,
@@ -216,7 +210,6 @@ impl DisplayCache {
     pub fn new() -> Self {
         Self {
             static_layout_drawn: false,
-            header: String::new(),
             temp: String::new(),
             hum: String::new(),
             pressure: String::new(),
@@ -355,7 +348,6 @@ fn draw_dynamic<D>(
         let _ = pm05_text.push_str("---");
     }
 
-    let header = "ENV-MONITOR by JPL Design";
     let field_temp = climate_value_field(
         LABEL_TEMP.x,
         CLIMATE_TEMP_VALUE_CLEAR_W,
@@ -372,7 +364,6 @@ fn draw_dynamic<D>(
         STYLE_CLIMATE_HUM_VALUE,
     );
 
-    update_field_if_changed(display, &mut cache.header, header, FIELD_HEADER);
     update_field_if_changed(display, &mut cache.temp, temp_text.as_str(), field_temp);
     update_field_if_changed(display, &mut cache.hum, hum_text.as_str(), field_hum);
     update_field_if_changed(
@@ -423,7 +414,7 @@ fn update_field_if_changed<D, const N: usize>(
                 Point::new(field.clear_x, field.clear_y),
                 Size::new(field.clear_w, field.clear_h),
             ),
-            1,
+            0,
         ),
     );
 

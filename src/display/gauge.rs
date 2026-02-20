@@ -20,7 +20,9 @@ pub(super) fn update_status_if_changed<D>(
 ) where
     D: DrawTarget<Color = DisplayColor>,
 {
-    if cache.status_text.as_str() == text && cache.status_pm25 == pm25 {
+    let text_changed = cache.status_text.as_str() != text;
+    let pm25_changed = cache.status_pm25 != pm25;
+    if !text_changed && !pm25_changed {
         return;
     }
 
@@ -32,11 +34,16 @@ pub(super) fn update_status_if_changed<D>(
         (None, None) => false,
         _ => true,
     };
+    let should_erase_needle = prev_angle.is_some() && (should_redraw_needle || text_changed);
+    let should_draw_needle = next_angle.is_some() && (should_redraw_needle || text_changed);
 
-    if should_redraw_needle {
+    if should_erase_needle {
         if let Some(angle) = prev_angle {
             erase_status_needle(display, angle);
-            restore_gauge_slice(display, angle);
+            // Fast mode keeps the needle inside the arc, so no arc restore is needed.
+            if !GAUGE_NEEDLE_FAST_MODE {
+                restore_gauge_slice(display, angle);
+            }
         }
     }
 
@@ -50,7 +57,7 @@ pub(super) fn update_status_if_changed<D>(
     let text_pos = centered_status_text_pos(font, text);
     draw_text_aa(display, text_pos, font, value_style.color, text);
 
-    if should_redraw_needle {
+    if should_draw_needle {
         if let Some(angle) = next_angle {
             draw_status_needle(display, angle);
         }
@@ -222,46 +229,12 @@ where
 {
     let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
     let outer_r = pointer_outer_radius(inner_r);
-    let arrow_len = gauge_scale_i32(GAUGE_ARROW_LEN_BASE);
-    let arrow_half_w = gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE);
-    let arrow_tip_offset = gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE);
-    let shadow_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_SHADOW_PAD_BASE);
-
-    let (start, shaft_end, tip, left, right) = needle_geometry(
-        angle_deg,
-        inner_r,
-        outer_r,
-        arrow_len,
-        arrow_half_w,
-        arrow_tip_offset,
-    );
-    let (_, _, shadow_tip, shadow_left, shadow_right) = needle_geometry(
-        angle_deg,
-        inner_r,
-        outer_r,
-        arrow_len + shadow_pad,
-        arrow_half_w + shadow_pad,
-        arrow_tip_offset + shadow_pad,
-    );
-
-    let shadow_w = gauge_scale_i32_nonzero(GAUGE_NEEDLE_SHADOW_W_BASE) as u32;
+    let start = polar_point(GAUGE_CENTER, inner_r, angle_deg);
+    let end = polar_point(GAUGE_CENTER, outer_r, angle_deg);
     let needle_w = gauge_scale_i32_nonzero(GAUGE_NEEDLE_W_BASE) as u32;
 
-    let _ = Line::new(start, shaft_end)
-        .into_styled(PrimitiveStyle::with_stroke(
-            GAUGE_NEEDLE_SHADOW_COLOR,
-            shadow_w,
-        ))
-        .draw(display);
-    let _ = Triangle::new(shadow_tip, shadow_left, shadow_right)
-        .into_styled(PrimitiveStyle::with_fill(GAUGE_NEEDLE_SHADOW_COLOR))
-        .draw(display);
-
-    let _ = Line::new(start, shaft_end)
+    let _ = Line::new(start, end)
         .into_styled(PrimitiveStyle::with_stroke(GAUGE_NEEDLE_COLOR, needle_w))
-        .draw(display);
-    let _ = Triangle::new(tip, left, right)
-        .into_styled(PrimitiveStyle::with_fill(GAUGE_NEEDLE_COLOR))
         .draw(display);
 
     let _ = Circle::with_center(GAUGE_CENTER, gauge_scale_u32_nonzero(GAUGE_HUB_D_BASE))
@@ -275,23 +248,13 @@ where
 {
     let inner_r = gauge_scale_i32(GAUGE_NEEDLE_INNER_R_BASE);
     let outer_r = pointer_outer_radius(inner_r);
-    let clear_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_CLEAR_PAD_BASE);
+    let start = polar_point(GAUGE_CENTER, inner_r, angle_deg);
+    let end = polar_point(GAUGE_CENTER, outer_r, angle_deg);
 
-    let (start, _, tip, left, right) = needle_geometry(
-        angle_deg,
-        inner_r,
-        outer_r,
-        gauge_scale_i32(GAUGE_ARROW_LEN_BASE) + clear_pad,
-        gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE) + clear_pad,
-        gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE) + clear_pad,
-    );
-
-    let clear_w = gauge_scale_i32_nonzero(GAUGE_NEEDLE_CLEAR_W_BASE) as u32;
-    let _ = Line::new(start, tip)
+    let clear_w = (gauge_scale_i32_nonzero(GAUGE_NEEDLE_W_BASE) + 2)
+        .max(gauge_scale_i32_nonzero(GAUGE_NEEDLE_CLEAR_W_BASE)) as u32;
+    let _ = Line::new(start, end)
         .into_styled(PrimitiveStyle::with_stroke(BG_COLOR, clear_w))
-        .draw(display);
-    let _ = Triangle::new(tip, left, right)
-        .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
         .draw(display);
 
     let _ = Circle::with_center(

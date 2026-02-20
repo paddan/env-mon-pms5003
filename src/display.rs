@@ -22,7 +22,7 @@ use layout::{
 use text::{centered_status_text_pos, draw_text_aa, font_for, font_height, status_text_clear_rect};
 
 use crate::{
-    air_quality::{band_from_pm25, level_text_sv, ratio_from_pm25, EuAqiBand},
+    air_quality::{level_text_sv, ratio_from_pm25},
     bme280::BmeReading,
     pms5003::Pms5003Reading,
 };
@@ -491,15 +491,4 @@ fn brighten(color: DisplayColor, amount: u8) -> DisplayColor {
         color.g().saturating_add(g_amount).min(63),
         color.b().saturating_add(amount).min(31),
     )
-}
-
-fn status_color(pm25: u16) -> DisplayColor {
-    match band_from_pm25(pm25) {
-        EuAqiBand::Good => GREEN,
-        EuAqiBand::Fair => LIME,
-        EuAqiBand::Moderate => YELLOW,
-        EuAqiBand::Poor => ORANGE,
-        EuAqiBand::VeryPoor => RED,
-        EuAqiBand::ExtremelyPoor => DEEP_RED,
-    }
 }

@@ -34,8 +34,14 @@ pub(super) fn update_status_if_changed<D>(
         (None, None) => false,
         _ => true,
     };
-    let should_erase_needle = prev_angle.is_some() && (should_redraw_needle || text_changed);
-    let should_draw_needle = next_angle.is_some() && (should_redraw_needle || text_changed);
+
+    // Keep text and pointer synchronized: redraw both only when the pointer redraws.
+    if !should_redraw_needle {
+        return;
+    }
+
+    let should_erase_needle = prev_angle.is_some();
+    let should_draw_needle = next_angle.is_some();
 
     if should_erase_needle {
         if let Some(angle) = prev_angle {
@@ -49,7 +55,9 @@ pub(super) fn update_status_if_changed<D>(
 
     let value_style = TextStyleCfg {
         font: STYLE_STATUS_TEXT.font,
-        color: pm25.map(status_color).unwrap_or(TEXT_DIM),
+        color: pm25
+            .map(|value| gauge_gradient_color(status_ratio(value)))
+            .unwrap_or(TEXT_DIM),
     };
     let font = font_for(value_style.font);
     clear_rect(display, status_text_clear_rect(font));

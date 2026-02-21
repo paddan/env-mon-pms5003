@@ -239,6 +239,7 @@ pub fn render_tft<D>(
     display: &mut D,
     cache: &mut DisplayCache,
     pms: Option<Pms5003Reading>,
+    aqi_pm: Option<u16>,
     bme: Option<BmeReading>,
 ) where
     D: DrawTarget<Color = DisplayColor>,
@@ -248,7 +249,7 @@ pub fn render_tft<D>(
         cache.static_layout_drawn = true;
     }
 
-    draw_dynamic(display, cache, pms, bme);
+    draw_dynamic(display, cache, pms, aqi_pm, bme);
 }
 
 fn draw_static_layout<D>(display: &mut D)
@@ -293,6 +294,7 @@ fn draw_dynamic<D>(
     display: &mut D,
     cache: &mut DisplayCache,
     pms: Option<Pms5003Reading>,
+    aqi_pm: Option<u16>,
     bme: Option<BmeReading>,
 ) where
     D: DrawTarget<Color = DisplayColor>,
@@ -331,16 +333,12 @@ fn draw_dynamic<D>(
     let mut pm10_text: String<8> = String::new();
     let mut pm03_text: String<8> = String::new();
     let mut pm05_text: String<8> = String::new();
-    let mut status_pm25 = None;
-
     if let Some(reading) = pms {
         let _ = write!(pm25_text, "{}", reading.pm2_5_atm);
         let _ = write!(pm1_text, "{}", reading.pm1_0_atm);
         let _ = write!(pm10_text, "{}", reading.pm10_atm);
         let _ = write!(pm03_text, "{}", reading.particles_0_3um);
         let _ = write!(pm05_text, "{}", reading.particles_0_5um);
-
-        status_pm25 = Some(reading.pm2_5_atm);
     } else {
         let _ = pm25_text.push_str("---");
         let _ = pm1_text.push_str("---");
@@ -373,8 +371,8 @@ fn draw_dynamic<D>(
         pressure_text.as_str(),
         field_pressure,
     );
-    let status_text = level_text_sv(status_pm25);
-    update_status_if_changed(display, cache, status_text, status_pm25);
+    let status_text = level_text_sv(aqi_pm);
+    update_status_if_changed(display, cache, status_text, aqi_pm);
 
     update_field_if_changed(display, &mut cache.pm1, pm1_text.as_str(), FIELD_PM1);
     update_field_if_changed(display, &mut cache.pm25, pm25_text.as_str(), FIELD_PM25);

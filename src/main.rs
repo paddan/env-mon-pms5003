@@ -4,6 +4,7 @@
 mod air_quality;
 mod bme280;
 mod display;
+mod pm_rolling;
 mod pms5003;
 
 use ::bme280::i2c::BME280;
@@ -31,6 +32,7 @@ use panic_halt as _;
 use crate::{
     bme280::{detect_bme_address, BmeReading},
     display::{clear_tft, render_tft, DisplayCache},
+    pm_rolling::Pm24hRollingAverage,
     pms5003::{send_pms_command, PmsParser, PMS_ACTIVE_MODE_CMD, PMS_WAKE_CMD},
 };
 
@@ -142,7 +144,7 @@ fn main() -> ! {
 
     if let Some(display) = tft.as_mut() {
         clear_tft(display);
-        render_tft(display, &mut display_cache, None, latest_bme);
+        render_tft(display, &mut display_cache, None, None, latest_bme);
     }
 
     println!("Waiting for valid PMS5003 frames...");
@@ -152,6 +154,8 @@ fn main() -> ! {
     let mut no_data_polls = 0u16;
 
     let mut latest_pms = None;
+    let mut latest_aqi_pm = None;
+    let mut pm_24h_avg = Pm24hRollingAverage::new();
     let mut last_bme_measure = Instant::now() - BME_MEASURE_INTERVAL;
     let mut last_display_refresh = Instant::now() - DISPLAY_REFRESH_INTERVAL;
     let mut display_dirty = true;
@@ -168,10 +172,23 @@ fn main() -> ! {
             Ok(count) => {
                 no_data_polls = 0;
                 if let Some(reading) = pms_parser.process_chunk(&rx_buf[..count]) {
+                    let avg = pm_24h_avg.update(
+                        reading.pm1_0_atm,
+                        reading.pm2_5_atm,
+                        reading.pm10_atm,
+                        Instant::now(),
+                    );
                     latest_pms = Some(reading);
+                    let aqi_pm = avg.pm1_0.max(avg.pm2_5).max(avg.pm10);
+                    latest_aqi_pm = Some(aqi_pm);
                     display_dirty = true;
                     println!(
-                        "ATM ug/m3: PM1.0={} PM2.5={} PM10={}",
+                        "ATM ug/m3 (24h glidande): PM1.0={} PM2.5={} PM10={}",
+                        avg.pm1_0, avg.pm2_5, avg.pm10
+                    );
+                    println!("AQI PM-underlag (24h max av PM1/PM2.5/PM10): {}", aqi_pm);
+                    println!(
+                        "ATM ug/m3 (rå): PM1.0={} PM2.5={} PM10={}",
                         reading.pm1_0_atm, reading.pm2_5_atm, reading.pm10_atm
                     );
                     println!(
@@ -226,7 +243,13 @@ fn main() -> ! {
         if display_dirty && last_display_refresh.elapsed() >= DISPLAY_REFRESH_INTERVAL {
             last_display_refresh = Instant::now();
             if let Some(display) = tft.as_mut() {
-                render_tft(display, &mut display_cache, latest_pms, latest_bme);
+                render_tft(
+                    display,
+                    &mut display_cache,
+                    latest_pms,
+                    latest_aqi_pm,
+                    latest_bme,
+                );
                 display_dirty = false;
             }
         }

@@ -10,21 +10,46 @@
 
 ESP32-C3 Super Mini side:
 
+`Left side:` `5V`, `GND`, `3V3`, `GPIO4`, `GPIO3`, `GPIO2`, `GPIO1`, `GPIO0`  
+`Right side:` `GPIO5`, `GPIO6`, `GPIO7`, `GPIO8`, `GPIO9`, `GPIO10`, `GPIO20`, `GPIO21`
+
 | ESP32-C3 pin | Connects to                              | Notes                           |
 |:---------------|:---------------------------------------|:--------------------------------|
 | `5V`           | PMS5003 `VCC`                          | PMS5003 power (5V)              |
 | `GND`          | PMS5003 `GND`, BME280 `GND`, TFT `GND` | Shared ground                   |
-| `GPIO4`        | PMS5003 `TXD`                          | UART1 RX                        |
-| `GPIO5`        | PMS5003 `RXD`                          | UART1 TX (wake/active commands) |
+| `GPIO2`        | PMS5003 `TXD`                          | UART1 RX                        |
+| `GPIO3`        | PMS5003 `RXD`                          | UART1 TX (wake/active commands) |
 | `3V3`          | BME280 `VIN/VCC`, TFT `VCC`            | 3.3V rail                       |
-| `GPIO6`        | BME280 `SDA`                           | I2C SDA                         |
-| `GPIO7`        | BME280 `SCL`                           | I2C SCL                         |
-| `GPIO10`       | TFT `SDI(MOSI)`                        | SPI MOSI                        |
-| `GPIO8`        | TFT `SCK`                              | SPI SCK                         |
-| `GPIO3`        | TFT `CS`                               | SPI chip select                 |
-| `GPIO2`        | TFT `DC`                               | Data/command                    |
-| `GPIO1`        | TFT `RESET`                            | Display reset                   |
-| `GPIO0`        | TFT `LED`                              | Backlight enable (active high)  |
+| `GPIO0`        | BME280 `SDA`                           | I2C SDA                         |
+| `GPIO1`        | BME280 `SCL`                           | I2C SCL                         |
+| `GPIO5`        | TFT `CS`                               | SPI chip select                 |
+| `GPIO6`        | TFT `RESET`                            | Display reset                   |
+| `GPIO7`        | TFT `DC`                               | Data/command                    |
+| `GPIO8`        | TFT `SDI(MOSI)`                        | SPI MOSI                        |
+| `GPIO9`        | TFT `SCK`                              | SPI SCK                         |
+| `GPIO10`       | TFT `LED`                              | Backlight enable (active high)  |
+
+### TFT connector order (module side)
+
+Given your module pin order:
+
+- `CS`
+- `RESET`
+- `DC`
+- `SDI (MOSI)`
+- `SCK`
+- `LED`
+- `SDO (MISO)`
+
+Use this mapping:
+
+- `CS` -> ESP `GPIO5`
+- `RESET` -> ESP `GPIO6`
+- `DC` -> ESP `GPIO7`
+- `SDI (MOSI)` -> ESP `GPIO8`
+- `SCK` -> ESP `GPIO9`
+- `LED` -> ESP `GPIO10`
+- `SDO (MISO)` -> not connected (not used by firmware)
 
 ### TFT module pins not used by firmware
 
@@ -36,9 +61,20 @@ ESP32-C3 Super Mini side:
 
 - `PIN1 VCC` -> ESP32-C3 Super Mini `5V`
 - `PIN2 GND` -> ESP32-C3 Super Mini `GND`
-- `PIN4 RX` -> ESP32-C3 Super Mini `GPIO5` (optional but recommended)
-- `PIN5 TX` -> ESP32-C3 Super Mini `GPIO4`
+- `PIN4 RX` -> ESP32-C3 Super Mini `GPIO3` (optional but recommended)
+- `PIN5 TX` -> ESP32-C3 Super Mini `GPIO2`
 - `PIN3 SET`, `PIN6 RESET`, `PIN7/8 NC` -> leave unconnected
+
+If your PMS cable has no markings:
+
+- Use your known reference first: `PIN1 = 5V`, `PIN2 = GND`.
+- Then count pins in the same direction from `PIN1/PIN2`:
+  - `PIN3 = SET` (leave unconnected)
+  - `PIN4 = RX` (connect to ESP `GPIO3`)
+  - `PIN5 = TX` (connect to ESP `GPIO2`)
+  - `PIN6 = RESET` (leave unconnected)
+  - `PIN7 = NC` (leave unconnected)
+  - `PIN8 = NC` (leave unconnected)
 
 ### BME280 notes
 

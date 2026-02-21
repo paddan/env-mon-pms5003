@@ -51,11 +51,11 @@ fn main() -> ! {
     let uart_config = UartConfig::default().with_baudrate(9_600);
     let mut pms_uart = Uart::new(peripherals.UART1, uart_config)
         .expect("Failed to initialize UART1")
-        .with_rx(peripherals.GPIO4)
-        .with_tx(peripherals.GPIO5);
+        .with_rx(peripherals.GPIO2)
+        .with_tx(peripherals.GPIO3);
 
     println!("PMS5003 reader started");
-    println!("PMS UART: UART1 RX=GPIO4 TX=GPIO5 @9600");
+    println!("PMS UART: UART1 RX=GPIO2 TX=GPIO3 @9600");
 
     let wake_ok = send_pms_command(&mut pms_uart, &mut delay, &PMS_WAKE_CMD, "wake");
     delay.delay_millis(1500);
@@ -73,8 +73,8 @@ fn main() -> ! {
     let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(100));
     let mut i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("Failed to initialize I2C0")
-        .with_sda(peripherals.GPIO6)
-        .with_scl(peripherals.GPIO7);
+        .with_sda(peripherals.GPIO0)
+        .with_scl(peripherals.GPIO1);
 
     let bme_address = match detect_bme_address(&mut i2c) {
         Some((address, chip_id)) => {
@@ -111,13 +111,13 @@ fn main() -> ! {
         .with_mode(HalSpiMode::_0);
     let spi_bus = Spi::new(peripherals.SPI2, spi_config)
         .expect("Failed to initialize SPI2")
-        .with_sck(peripherals.GPIO8)
-        .with_mosi(peripherals.GPIO10);
+        .with_sck(peripherals.GPIO9)
+        .with_mosi(peripherals.GPIO8);
 
-    let tft_cs = Output::new(peripherals.GPIO3, Level::High, OutputConfig::default());
-    let tft_dc = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
-    let tft_rst = Output::new(peripherals.GPIO1, Level::High, OutputConfig::default());
-    let _tft_led = Output::new(peripherals.GPIO0, Level::High, OutputConfig::default());
+    let tft_cs = Output::new(peripherals.GPIO5, Level::High, OutputConfig::default());
+    let tft_rst = Output::new(peripherals.GPIO6, Level::High, OutputConfig::default());
+    let tft_dc = Output::new(peripherals.GPIO7, Level::Low, OutputConfig::default());
+    let _tft_led = Output::new(peripherals.GPIO10, Level::High, OutputConfig::default());
 
     let tft_spi =
         ExclusiveDevice::new_no_delay(spi_bus, tft_cs).expect("Failed to create SPI device");

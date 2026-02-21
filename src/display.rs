@@ -32,9 +32,8 @@ pub type DisplayColor = Rgb565;
 // ===== Appearance Config (edit here) =====
 // Colors
 const BG_COLOR: DisplayColor = DisplayColor::new(0, 0, 0);
-const GRID_COLOR: DisplayColor = DisplayColor::new(8, 16, 8);
-const TEXT_WHITE: DisplayColor = DisplayColor::new(31, 63, 31);
-const TEXT_DIM: DisplayColor = DisplayColor::new(20, 38, 20);
+const GRID_COLOR: DisplayColor = DisplayColor::new(24, 40, 24);
+const TEXT_WHITE: DisplayColor = DisplayColor::new(24, 40, 24);
 const NEON_GREEN: DisplayColor = DisplayColor::new(0, 63, 12);
 const LIME: DisplayColor = DisplayColor::new(12, 63, 0);
 const BLUE: DisplayColor = DisplayColor::new(10, 34, 31);
@@ -87,7 +86,7 @@ enum ResolvedFont {
 // Typography by function
 const STYLE_CLIMATE_LABEL: TextStyleCfg = TextStyleCfg {
     font: FontToken::Medium,
-    color: TEXT_DIM,
+    color: TEXT_WHITE,
 };
 const STYLE_CLIMATE_TEMP_VALUE: TextStyleCfg = TextStyleCfg {
     font: FontToken::Large,
@@ -104,12 +103,12 @@ const STYLE_CLIMATE_PRESSURE_VALUE: TextStyleCfg = TextStyleCfg {
 
 const STYLE_STATUS_TEXT: TextStyleCfg = TextStyleCfg {
     font: FontToken::Medium,
-    color: TEXT_DIM,
+    color: TEXT_WHITE,
 };
 
 const STYLE_PARTICLE_LABEL: TextStyleCfg = TextStyleCfg {
     font: FontToken::Medium,
-    color: TEXT_DIM,
+    color: TEXT_WHITE,
 };
 const STYLE_PARTICLE_VALUE: TextStyleCfg = TextStyleCfg {
     font: FontToken::Larger,
@@ -139,10 +138,8 @@ const GAUGE_RESTORE_SPAN_DEG: f32 = 7.0;
 const GAUGE_NEEDLE_INNER_R_BASE: i32 = 2;
 const GAUGE_NEEDLE_OUTER_R_BASE: i32 = 70;
 const GAUGE_NEEDLE_W_BASE: i32 = 4;
-const GAUGE_NEEDLE_SHADOW_W_BASE: i32 = 6;
 const GAUGE_NEEDLE_CLEAR_W_BASE: i32 = 8;
-const GAUGE_NEEDLE_COLOR: DisplayColor = TEXT_WHITE;
-const GAUGE_NEEDLE_SHADOW_COLOR: DisplayColor = DisplayColor::new(5, 12, 5);
+const GAUGE_NEEDLE_COLOR: DisplayColor = DisplayColor::new(24, 56, 24);
 const GAUGE_HUB_D_BASE: u32 = 10;
 const GAUGE_HUB_CLEAR_D_BASE: u32 = 12;
 const GAUGE_HUB_COLOR: DisplayColor = TEXT_WHITE;
@@ -150,13 +147,12 @@ const STATUS_TEXT_GAP_Y: i32 = 16;
 const STATUS_TEXT_CLEAR_PAD_X: i32 = 2;
 const STATUS_TEXT_CLEAR_PAD_TOP: i32 = 1;
 const STATUS_TEXT_CLEAR_PAD_BOTTOM: i32 = 0;
-const STATUS_TEXT_MAX_CHARS: i32 = 15;
+const STATUS_TEXT_MAX_CHARS: i32 = 20;
 const GAUGE_ARROW_LEN_BASE: i32 = 11;
 const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
 const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
-const GAUGE_ARROW_SHADOW_PAD_BASE: i32 = 1;
 const GAUGE_ARROW_CLEAR_PAD_BASE: i32 = 2;
-const GAUGE_NEEDLE_FAST_MODE: bool = true;
+const GAUGE_NEEDLE_FAST_MODE: bool = false;
 const GAUGE_NEEDLE_MIN_REDRAW_DEG: f32 = 1.0;
 
 #[derive(Copy, Clone)]

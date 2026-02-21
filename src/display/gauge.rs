@@ -56,8 +56,8 @@ pub(super) fn update_status_if_changed<D>(
     let value_style = TextStyleCfg {
         font: STYLE_STATUS_TEXT.font,
         color: pm25
-            .map(|value| gauge_gradient_color(status_ratio(value)))
-            .unwrap_or(TEXT_DIM),
+            .map(|value| brighten(gauge_gradient_color(status_ratio(value)), 6))
+            .unwrap_or(TEXT_WHITE),
     };
     let font = font_for(value_style.font);
     clear_rect(display, status_text_clear_rect(font));
@@ -143,7 +143,6 @@ where
     let arrow_len = gauge_scale_i32(GAUGE_ARROW_LEN_BASE);
     let arrow_half_w = gauge_scale_i32(GAUGE_ARROW_HALF_W_BASE);
     let arrow_tip_offset = gauge_scale_i32(GAUGE_ARROW_TIP_OFFSET_BASE);
-    let shadow_pad = gauge_scale_i32_nonzero(GAUGE_ARROW_SHADOW_PAD_BASE);
 
     let (start, shaft_end, tip, left, right) = needle_geometry(
         angle_deg,
@@ -152,29 +151,6 @@ where
         arrow_len,
         arrow_half_w,
         arrow_tip_offset,
-    );
-    let (_, _, shadow_tip, shadow_left, shadow_right) = needle_geometry(
-        angle_deg,
-        inner_r,
-        outer_r,
-        arrow_len + shadow_pad,
-        arrow_half_w + shadow_pad,
-        arrow_tip_offset + shadow_pad,
-    );
-
-    draw_capsule_aa(
-        display,
-        start,
-        shaft_end,
-        gauge_scale_i32_nonzero(GAUGE_NEEDLE_SHADOW_W_BASE) as f32,
-        GAUGE_NEEDLE_SHADOW_COLOR,
-    );
-    fill_triangle_aa(
-        display,
-        shadow_tip,
-        shadow_left,
-        shadow_right,
-        GAUGE_NEEDLE_SHADOW_COLOR,
     );
 
     draw_capsule_aa(

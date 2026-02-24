@@ -29,6 +29,82 @@ ESP32-C3 Super Mini side:
 | `GPIO9`        | TFT `SCK`                              | SPI SCK                         |
 | `GPIO10`       | TFT `LED`                              | Backlight enable (active high)  |
 
+### Mermaid wiring overview
+
+```mermaid
+flowchart LR
+  subgraph ESP32[ESP32-C3 Super Mini]
+    E5V[5V]
+    E33[3V3]
+    EGND[GND]
+    G0[GPIO0 SDA]
+    G1[GPIO1 SCL]
+    G2[GPIO2 UART RX]
+    G3[GPIO3 UART TX]
+    G5[GPIO5 TFT CS]
+    G6[GPIO6 TFT RST]
+    G7[GPIO7 TFT DC]
+    G8[GPIO8 TFT MOSI]
+    G9[GPIO9 TFT SCK]
+    G10[GPIO10 TFT LED]
+  end
+
+  subgraph HUB[Perfboard - 3 rails]
+    B5[5V rail]
+    B33[3V3 rail]
+    BG[GND rail]
+  end
+
+  E5V --> B5
+  E33 --> B33
+  EGND --> BG
+
+  subgraph PMS[PMS5003]
+    PVCC[VCC 5V]
+    PGND[GND]
+    PTX[TXD]
+    PRX[RXD]
+  end
+
+  B5 --> PVCC
+  BG --> PGND
+  PTX --> G2
+  G3 --> PRX
+
+  subgraph BME[BME280]
+    BVCC[VCC 3V3]
+    BGND[GND]
+    BSDA[SDA]
+    BSCL[SCL]
+  end
+
+  B33 --> BVCC
+  BG --> BGND
+  G0 --- BSDA
+  G1 --- BSCL
+
+  subgraph TFT[TFT 2.8in ILI9341]
+    TVCC[VCC 3V3]
+    TGND[GND]
+    TCS[CS]
+    TRST[RESET]
+    TDC[DC]
+    TMOSI[SDI MOSI]
+    TSCK[SCK]
+    TLED[LED]
+    TMISO[SDO MISO not connected]
+  end
+
+  B33 --> TVCC
+  BG --> TGND
+  G5 --> TCS
+  G6 --> TRST
+  G7 --> TDC
+  G8 --> TMOSI
+  G9 --> TSCK
+  G10 --> TLED
+```
+
 ### TFT connector order (module side)
 
 Given your module pin order:

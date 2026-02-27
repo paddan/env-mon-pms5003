@@ -30,6 +30,7 @@ use mipidsi::{
 use panic_halt as _;
 
 use crate::{
+    air_quality::aqi_pm25_equiv,
     bme280::{detect_bme_address, BmeReading},
     display::{clear_tft, render_tft, DisplayCache},
     pm_rolling::Pm24hRollingAverage,
@@ -179,14 +180,14 @@ fn main() -> ! {
                         Instant::now(),
                     );
                     latest_pms = Some(reading);
-                    let aqi_pm = avg.pm1_0.max(avg.pm2_5).max(avg.pm10);
+                    let aqi_pm = aqi_pm25_equiv(avg.pm2_5, avg.pm10);
                     latest_aqi_pm = Some(aqi_pm);
                     display_dirty = true;
                     println!(
                         "ATM ug/m3 (24h glidande): PM1.0={} PM2.5={} PM10={}",
                         avg.pm1_0, avg.pm2_5, avg.pm10
                     );
-                    println!("AQI PM-underlag (24h max av PM1/PM2.5/PM10): {}", aqi_pm);
+                    println!("AQI PM-underlag (24h PM2.5-ekvivalent): {}", aqi_pm);
                     println!(
                         "ATM ug/m3 (rå): PM1.0={} PM2.5={} PM10={}",
                         reading.pm1_0_atm, reading.pm2_5_atm, reading.pm10_atm

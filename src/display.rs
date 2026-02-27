@@ -194,7 +194,7 @@ pub struct DisplayCache {
     temp: String<16>,
     hum: String<16>,
     pressure: String<16>,
-    status_text: String<16>,
+    status_text: String<26>,
     pm25: String<8>,
     pm1: String<8>,
     pm10: String<8>,

@@ -1,13 +1,11 @@
 use core::fmt::Write as _;
 
 use embedded_graphics::{
-    geometry::AngleUnit,
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{Arc, Circle, Line, PrimitiveStyle, Rectangle},
+    primitives::{Line, PrimitiveStyle, Rectangle},
 };
 use heapless::String;
-use micromath::F32Ext;
 
 mod gauge;
 mod layout;
@@ -19,10 +17,10 @@ use layout::{
     FIELD_PM10, FIELD_PM25, LABEL_PM03, LABEL_PM05, LABEL_PM1, LABEL_PM10, LABEL_PM25,
     LABEL_PRESSURE, LABEL_RH, LABEL_TEMP,
 };
-use text::{centered_status_text_pos, draw_text_aa, font_for, font_height, status_text_clear_rect};
+use text::{centered_status_text_pos, draw_text_aa, font_height, status_text_clear_rect};
 
 use crate::{
-    air_quality::{level_text_sv, ratio_from_pm25},
+    air_quality::level_text_sv,
     bme280::BmeReading,
     pms5003::Pms5003Reading,
 };
@@ -35,13 +33,8 @@ const BG_COLOR: DisplayColor = DisplayColor::new(0, 0, 0);
 const GRID_COLOR: DisplayColor = DisplayColor::new(24, 40, 24);
 const TEXT_WHITE: DisplayColor = DisplayColor::new(24, 40, 24);
 const NEON_GREEN: DisplayColor = DisplayColor::new(0, 63, 12);
-const LIME: DisplayColor = DisplayColor::new(12, 63, 0);
 const BLUE: DisplayColor = DisplayColor::new(10, 34, 31);
-const GREEN: DisplayColor = DisplayColor::new(0, 54, 8);
 const YELLOW: DisplayColor = DisplayColor::new(31, 58, 0);
-const ORANGE: DisplayColor = DisplayColor::new(31, 34, 0);
-const RED: DisplayColor = DisplayColor::new(31, 4, 4);
-const DEEP_RED: DisplayColor = DisplayColor::new(23, 0, 0);
 
 // Fonts
 #[allow(dead_code)]
@@ -57,30 +50,6 @@ enum FontToken {
 struct TextStyleCfg {
     font: FontToken,
     color: DisplayColor,
-}
-
-#[derive(Copy, Clone)]
-enum U8g2FontToken {
-    Small,
-    Medium,
-    Large,
-    Larger,
-}
-
-impl From<FontToken> for U8g2FontToken {
-    fn from(value: FontToken) -> Self {
-        match value {
-            FontToken::Small => U8g2FontToken::Small,
-            FontToken::Medium => U8g2FontToken::Medium,
-            FontToken::Large => U8g2FontToken::Large,
-            FontToken::Larger => U8g2FontToken::Larger,
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-enum ResolvedFont {
-    U8g2(U8g2FontToken),
 }
 
 // Typography by function
@@ -100,12 +69,6 @@ const STYLE_CLIMATE_PRESSURE_VALUE: TextStyleCfg = TextStyleCfg {
     font: FontToken::Large,
     color: YELLOW,
 };
-
-const STYLE_STATUS_TEXT: TextStyleCfg = TextStyleCfg {
-    font: FontToken::Medium,
-    color: TEXT_WHITE,
-};
-
 const STYLE_PARTICLE_LABEL: TextStyleCfg = TextStyleCfg {
     font: FontToken::Medium,
     color: TEXT_WHITE,
@@ -114,79 +77,6 @@ const STYLE_PARTICLE_VALUE: TextStyleCfg = TextStyleCfg {
     font: FontToken::Larger,
     color: NEON_GREEN,
 };
-
-// Gauge geometry and style
-const GAUGE_CENTER: Point = Point::new(120, 154);
-const GAUGE_DIAMETER: u32 = 190;
-
-// Display orientation on this panel maps positive sweep to the desired upper status arc.
-const GAUGE_START_DEG: f32 = 180.0;
-const GAUGE_TOTAL_SWEEP_DEG: f32 = 180.0;
-
-const GAUGE_BAND_OUTER_W: u32 = 18;
-const GAUGE_BAND_EDGE_W: u32 = 14;
-const GAUGE_BAND_FILL_W: u32 = 10;
-const GAUGE_BAND_HIGHLIGHT_W: u32 = 6;
-const GAUGE_GRADIENT_STEP_DEG_STATIC: f32 = 4.0;
-const GAUGE_GRADIENT_STEP_DEG_RESTORE: f32 = 3.0;
-const GAUGE_COLOR_BLEND_SPAN_DEG: f32 = 30.0;
-
-const GAUGE_REF_DIAMETER: i32 = 190;
-const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.15;
-const GAUGE_POINTER_MAX_EXTRA_R_BASE: i32 = 120;
-const GAUGE_RESTORE_SPAN_DEG: f32 = 7.0;
-const GAUGE_NEEDLE_INNER_R_BASE: i32 = 2;
-const GAUGE_NEEDLE_OUTER_R_BASE: i32 = 70;
-const GAUGE_NEEDLE_W_BASE: i32 = 4;
-const GAUGE_NEEDLE_CLEAR_W_BASE: i32 = 8;
-const GAUGE_NEEDLE_COLOR: DisplayColor = DisplayColor::new(24, 56, 24);
-const GAUGE_HUB_D_BASE: u32 = 10;
-const GAUGE_HUB_CLEAR_D_BASE: u32 = 12;
-const GAUGE_HUB_COLOR: DisplayColor = TEXT_WHITE;
-const STATUS_TEXT_GAP_Y: i32 = 16;
-const STATUS_TEXT_CLEAR_PAD_X: i32 = 2;
-const STATUS_TEXT_CLEAR_PAD_TOP: i32 = 1;
-const STATUS_TEXT_CLEAR_PAD_BOTTOM: i32 = 0;
-const STATUS_TEXT_MAX_CHARS: i32 = 20;
-const GAUGE_ARROW_LEN_BASE: i32 = 11;
-const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
-const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
-const GAUGE_ARROW_CLEAR_PAD_BASE: i32 = 2;
-const GAUGE_NEEDLE_FAST_MODE: bool = false;
-const GAUGE_NEEDLE_MIN_REDRAW_DEG: f32 = 1.0;
-
-#[derive(Copy, Clone)]
-struct GaugeSegmentCfg {
-    sweep_deg: f32,
-    color: DisplayColor,
-}
-
-const GAUGE_SEGMENTS: [GaugeSegmentCfg; 6] = [
-    GaugeSegmentCfg {
-        sweep_deg: 5.0,
-        color: GREEN,
-    },
-    GaugeSegmentCfg {
-        sweep_deg: 10.0,
-        color: LIME,
-    },
-    GaugeSegmentCfg {
-        sweep_deg: 35.0,
-        color: YELLOW,
-    },
-    GaugeSegmentCfg {
-        sweep_deg: 40.0,
-        color: ORANGE,
-    },
-    GaugeSegmentCfg {
-        sweep_deg: 50.0,
-        color: RED,
-    },
-    GaugeSegmentCfg {
-        sweep_deg: 40.0,
-        color: DEEP_RED,
-    },
-];
 // ===== End appearance config =====
 
 pub struct DisplayCache {
@@ -384,7 +274,7 @@ where
     draw_text_aa(
         display,
         Point::new(label.x, label.y),
-        font_for(label.style.font),
+        label.style.font,
         label.style.color,
         label.text,
     );
@@ -416,37 +306,13 @@ fn update_field_if_changed<D, const N: usize>(
     draw_text_aa(
         display,
         Point::new(field.x, field.y),
-        font_for(field.style.font),
+        field.style.font,
         field.style.color,
         current,
     );
 
     previous.clear();
     let _ = previous.push_str(current);
-}
-
-fn draw_pixel_safe<D>(display: &mut D, p: Point, color: DisplayColor)
-where
-    D: DrawTarget<Color = DisplayColor>,
-{
-    let bounds = display.bounding_box();
-    let right = bounds.top_left.x + bounds.size.width as i32;
-    let bottom = bounds.top_left.y + bounds.size.height as i32;
-
-    if p.x < bounds.top_left.x || p.y < bounds.top_left.y || p.x >= right || p.y >= bottom {
-        return;
-    }
-
-    let _ = Pixel(p, color).draw(display);
-}
-
-fn scale_color(color: DisplayColor, alpha: u8) -> DisplayColor {
-    let a = alpha as u16;
-    DisplayColor::new(
-        ((color.r() as u16 * a) / 255) as u8,
-        ((color.g() as u16 * a) / 255) as u8,
-        ((color.b() as u16 * a) / 255) as u8,
-    )
 }
 
 fn clear_rect<D>(display: &mut D, area: Rectangle)
@@ -469,20 +335,4 @@ fn expand_rect(area: Rectangle, pad: i32) -> Rectangle {
     )
 }
 
-fn darken(color: DisplayColor, amount: u8) -> DisplayColor {
-    let g_amount = amount.saturating_mul(2);
-    DisplayColor::new(
-        color.r().saturating_sub(amount),
-        color.g().saturating_sub(g_amount),
-        color.b().saturating_sub(amount),
-    )
-}
 
-fn brighten(color: DisplayColor, amount: u8) -> DisplayColor {
-    let g_amount = amount.saturating_mul(2);
-    DisplayColor::new(
-        color.r().saturating_add(amount).min(31),
-        color.g().saturating_add(g_amount).min(63),
-        color.b().saturating_add(amount).min(31),
-    )
-}

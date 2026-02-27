@@ -1,4 +1,79 @@
-use super::*;
+use embedded_graphics::{
+    geometry::AngleUnit,
+    prelude::*,
+    primitives::{Arc, Circle, Line, PrimitiveStyle},
+};
+use micromath::F32Ext;
+
+use crate::air_quality::ratio_from_pm25;
+
+use super::{
+    DisplayCache,
+    DisplayColor, TextStyleCfg,
+    BG_COLOR, TEXT_WHITE,
+    clear_rect,
+    centered_status_text_pos, draw_text_aa, status_text_clear_rect,
+};
+
+// ===== Gauge appearance config =====
+const LIME: DisplayColor = DisplayColor::new(12, 63, 0);
+const GREEN: DisplayColor = DisplayColor::new(0, 54, 8);
+const ORANGE: DisplayColor = DisplayColor::new(31, 34, 0);
+const RED: DisplayColor = DisplayColor::new(31, 4, 4);
+const DEEP_RED: DisplayColor = DisplayColor::new(23, 0, 0);
+
+const GAUGE_CENTER: Point = Point::new(120, 154);
+const GAUGE_DIAMETER: u32 = 190;
+const GAUGE_START_DEG: f32 = 180.0;
+const GAUGE_TOTAL_SWEEP_DEG: f32 = 180.0;
+
+const GAUGE_BAND_OUTER_W: u32 = 18;
+const GAUGE_BAND_EDGE_W: u32 = 14;
+const GAUGE_BAND_FILL_W: u32 = 10;
+const GAUGE_BAND_HIGHLIGHT_W: u32 = 6;
+const GAUGE_GRADIENT_STEP_DEG_STATIC: f32 = 4.0;
+const GAUGE_GRADIENT_STEP_DEG_RESTORE: f32 = 3.0;
+const GAUGE_COLOR_BLEND_SPAN_DEG: f32 = 30.0;
+
+const GAUGE_REF_DIAMETER: i32 = 190;
+const GAUGE_POINTER_LENGTH_FACTOR: f32 = 1.15;
+const GAUGE_POINTER_MAX_EXTRA_R_BASE: i32 = 120;
+const GAUGE_RESTORE_SPAN_DEG: f32 = 7.0;
+const GAUGE_NEEDLE_INNER_R_BASE: i32 = 2;
+const GAUGE_NEEDLE_OUTER_R_BASE: i32 = 70;
+const GAUGE_NEEDLE_W_BASE: i32 = 4;
+const GAUGE_NEEDLE_CLEAR_W_BASE: i32 = 8;
+const GAUGE_NEEDLE_COLOR: DisplayColor = DisplayColor::new(24, 56, 24);
+const GAUGE_HUB_D_BASE: u32 = 10;
+const GAUGE_HUB_CLEAR_D_BASE: u32 = 12;
+const GAUGE_HUB_COLOR: DisplayColor = TEXT_WHITE;
+const GAUGE_ARROW_LEN_BASE: i32 = 11;
+const GAUGE_ARROW_HALF_W_BASE: i32 = 6;
+const GAUGE_ARROW_TIP_OFFSET_BASE: i32 = 3;
+const GAUGE_ARROW_CLEAR_PAD_BASE: i32 = 2;
+const GAUGE_NEEDLE_FAST_MODE: bool = false;
+const GAUGE_NEEDLE_MIN_REDRAW_DEG: f32 = 1.0;
+
+const STYLE_STATUS_TEXT: TextStyleCfg = TextStyleCfg {
+    font: super::FontToken::Medium,
+    color: TEXT_WHITE,
+};
+
+#[derive(Copy, Clone)]
+struct GaugeSegmentCfg {
+    sweep_deg: f32,
+    color: DisplayColor,
+}
+
+const GAUGE_SEGMENTS: [GaugeSegmentCfg; 6] = [
+    GaugeSegmentCfg { sweep_deg:  5.0, color: GREEN    },
+    GaugeSegmentCfg { sweep_deg: 10.0, color: LIME     },
+    GaugeSegmentCfg { sweep_deg: 35.0, color: super::YELLOW  },
+    GaugeSegmentCfg { sweep_deg: 40.0, color: ORANGE   },
+    GaugeSegmentCfg { sweep_deg: 50.0, color: RED      },
+    GaugeSegmentCfg { sweep_deg: 40.0, color: DEEP_RED },
+];
+// ===== End gauge appearance config =====
 
 pub(super) fn draw_gauge_scale<D>(display: &mut D)
 where
@@ -26,8 +101,8 @@ pub(super) fn update_status_if_changed<D>(
         return;
     }
 
-    let prev_angle = cache.status_pm25.map(|v| gauge_angle(status_ratio(v)));
-    let next_angle = pm25.map(|v| gauge_angle(status_ratio(v)));
+    let prev_angle = cache.status_pm25.map(|v| gauge_angle(ratio_from_pm25(v)));
+    let next_angle = pm25.map(|v| gauge_angle(ratio_from_pm25(v)));
     let redraw_threshold = GAUGE_NEEDLE_MIN_REDRAW_DEG.max(0.0);
     let should_redraw_needle = match (prev_angle, next_angle) {
         (Some(prev), Some(next)) => (next - prev).abs() >= redraw_threshold,
@@ -56,13 +131,13 @@ pub(super) fn update_status_if_changed<D>(
     let value_style = TextStyleCfg {
         font: STYLE_STATUS_TEXT.font,
         color: pm25
-            .map(|value| brighten(gauge_gradient_color(status_ratio(value)), 6))
+            .map(|value| brighten(gauge_gradient_color(ratio_from_pm25(value)), 6))
             .unwrap_or(TEXT_WHITE),
     };
-    let font = font_for(value_style.font);
-    clear_rect(display, status_text_clear_rect(font));
+    let font = value_style.font;
+    clear_rect(display, status_text_clear_rect(font, GAUGE_CENTER));
 
-    let text_pos = centered_status_text_pos(font, text);
+    let text_pos = centered_status_text_pos(font, text, GAUGE_CENTER);
     draw_text_aa(display, text_pos, font, value_style.color, text);
 
     if should_draw_needle {
@@ -247,10 +322,6 @@ where
     )
     .into_styled(PrimitiveStyle::with_fill(BG_COLOR))
     .draw(display);
-}
-
-fn status_ratio(pm25: u16) -> f32 {
-    ratio_from_pm25(pm25)
 }
 
 fn gauge_angle(ratio: f32) -> f32 {
@@ -511,4 +582,46 @@ fn lerp_u5(a: u8, b: u8, t: f32) -> u8 {
 
 fn lerp_u6(a: u8, b: u8, t: f32) -> u8 {
     round_to_i32(a as f32 + (b as f32 - a as f32) * t).clamp(0, 63) as u8
+}
+
+fn draw_pixel_safe<D>(display: &mut D, p: Point, color: DisplayColor)
+where
+    D: DrawTarget<Color = DisplayColor>,
+{
+    let bounds = display.bounding_box();
+    let right = bounds.top_left.x + bounds.size.width as i32;
+    let bottom = bounds.top_left.y + bounds.size.height as i32;
+
+    if p.x < bounds.top_left.x || p.y < bounds.top_left.y || p.x >= right || p.y >= bottom {
+        return;
+    }
+
+    let _ = Pixel(p, color).draw(display);
+}
+
+fn scale_color(color: DisplayColor, alpha: u8) -> DisplayColor {
+    let a = alpha as u16;
+    DisplayColor::new(
+        ((color.r() as u16 * a) / 255) as u8,
+        ((color.g() as u16 * a) / 255) as u8,
+        ((color.b() as u16 * a) / 255) as u8,
+    )
+}
+
+fn darken(color: DisplayColor, amount: u8) -> DisplayColor {
+    let g_amount = amount.saturating_mul(2);
+    DisplayColor::new(
+        color.r().saturating_sub(amount),
+        color.g().saturating_sub(g_amount),
+        color.b().saturating_sub(amount),
+    )
+}
+
+fn brighten(color: DisplayColor, amount: u8) -> DisplayColor {
+    let g_amount = amount.saturating_mul(2);
+    DisplayColor::new(
+        color.r().saturating_add(amount).min(31),
+        color.g().saturating_add(g_amount).min(63),
+        color.b().saturating_add(amount).min(31),
+    )
 }

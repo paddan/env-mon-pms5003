@@ -39,24 +39,80 @@ use crate::{
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
+// ===== Timing =====
 const BME_MEASURE_INTERVAL: Duration = Duration::from_secs(5);
 const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
 
 #[main]
 fn main() -> ! {
+    // ===== Hardware init =====
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
     let mut delay = Delay::new();
 
+    // ===== Pin map =====
+    let pms_rx   = peripherals.GPIO2;
+    let pms_tx   = peripherals.GPIO3;
+    let bme_sda  = peripherals.GPIO0;
+    let bme_scl  = peripherals.GPIO1;
+    let tft_sck  = peripherals.GPIO9;
+    let tft_mosi = peripherals.GPIO8;
+    let tft_cs   = peripherals.GPIO5;
+    let tft_rst  = peripherals.GPIO6;
+    let tft_dc   = peripherals.GPIO7;
+    let tft_led  = peripherals.GPIO10;
+
     let uart_config = UartConfig::default().with_baudrate(9_600);
     let mut pms_uart = Uart::new(peripherals.UART1, uart_config)
         .expect("Failed to initialize UART1")
-        .with_rx(peripherals.GPIO2)
-        .with_tx(peripherals.GPIO3);
+        .with_rx(pms_rx)
+        .with_tx(pms_tx);
 
+    let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(100));
+    let mut i2c = I2c::new(peripherals.I2C0, i2c_config)
+        .expect("Failed to initialize I2C0")
+        .with_sda(bme_sda)
+        .with_scl(bme_scl);
+
+    let spi_config = SpiConfig::default()
+        .with_frequency(Rate::from_mhz(40))
+        .with_mode(HalSpiMode::_0);
+    let spi_bus = Spi::new(peripherals.SPI2, spi_config)
+        .expect("Failed to initialize SPI2")
+        .with_sck(tft_sck)
+        .with_mosi(tft_mosi);
+
+    let tft_cs  = Output::new(tft_cs,  Level::High, OutputConfig::default());
+    let tft_rst = Output::new(tft_rst, Level::High, OutputConfig::default());
+    let tft_dc  = Output::new(tft_dc,  Level::Low,  OutputConfig::default());
+    let _tft_led = Output::new(tft_led, Level::High, OutputConfig::default());
+
+    let tft_spi =
+        ExclusiveDevice::new_no_delay(spi_bus, tft_cs).expect("Failed to create SPI device");
+    let mut tft_buf = [0u8; 2048];
+    let tft_di = SpiInterface::new(tft_spi, tft_dc, &mut tft_buf);
+
+    let mut tft = match Builder::new(ILI9341Rgb565, tft_di)
+        .reset_pin(tft_rst)
+        .display_size(240, 320)
+        .orientation(Orientation::new().flip_horizontal())
+        .color_order(ColorOrder::Bgr)
+        .init(&mut delay)
+    {
+        Ok(display) => {
+            println!("2.8in TFT initialized (ILI9341)");
+            Some(display)
+        }
+        Err(err) => {
+            println!("2.8in TFT init failed: {:?}", err);
+            None
+        }
+    };
+
+    // ===== Sensor startup =====
     println!("PMS5003 reader started");
-    println!("PMS UART: UART1 RX=GPIO2 TX=GPIO3 @9600");
+    println!("PMS UART: UART1 @9600");
 
     let wake_ok = send_pms_command(&mut pms_uart, &mut delay, &PMS_WAKE_CMD, "wake");
     delay.delay_millis(1500);
@@ -70,12 +126,6 @@ fn main() -> ! {
         println!("Continuing without confirmed PMS mode setup");
     }
     delay.delay_millis(200);
-
-    let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(100));
-    let mut i2c = I2c::new(peripherals.I2C0, i2c_config)
-        .expect("Failed to initialize I2C0")
-        .with_sda(peripherals.GPIO0)
-        .with_scl(peripherals.GPIO1);
 
     let bme_address = match detect_bme_address(&mut i2c) {
         Some((address, chip_id)) => {
@@ -107,42 +157,7 @@ fn main() -> ! {
         }
     }
 
-    let spi_config = SpiConfig::default()
-        .with_frequency(Rate::from_mhz(40))
-        .with_mode(HalSpiMode::_0);
-    let spi_bus = Spi::new(peripherals.SPI2, spi_config)
-        .expect("Failed to initialize SPI2")
-        .with_sck(peripherals.GPIO9)
-        .with_mosi(peripherals.GPIO8);
-
-    let tft_cs = Output::new(peripherals.GPIO5, Level::High, OutputConfig::default());
-    let tft_rst = Output::new(peripherals.GPIO6, Level::High, OutputConfig::default());
-    let tft_dc = Output::new(peripherals.GPIO7, Level::Low, OutputConfig::default());
-    let _tft_led = Output::new(peripherals.GPIO10, Level::High, OutputConfig::default());
-
-    let tft_spi =
-        ExclusiveDevice::new_no_delay(spi_bus, tft_cs).expect("Failed to create SPI device");
-    let mut tft_buf = [0u8; 2048];
-    let tft_di = SpiInterface::new(tft_spi, tft_dc, &mut tft_buf);
-
-    let mut tft = match Builder::new(ILI9341Rgb565, tft_di)
-        .reset_pin(tft_rst)
-        .display_size(240, 320)
-        .orientation(Orientation::new().flip_horizontal())
-        .color_order(ColorOrder::Bgr)
-        .init(&mut delay)
-    {
-        Ok(display) => {
-            println!("2.8in TFT initialized (ILI9341)");
-            Some(display)
-        }
-        Err(err) => {
-            println!("2.8in TFT init failed: {:?}", err);
-            None
-        }
-    };
     let mut display_cache = DisplayCache::new();
-
     if let Some(display) = tft.as_mut() {
         clear_tft(display);
         render_tft(display, &mut display_cache, None, None, latest_bme);
@@ -150,6 +165,7 @@ fn main() -> ! {
 
     println!("Waiting for valid PMS5003 frames...");
 
+    // ===== Loop state =====
     let mut rx_buf = [0u8; 64];
     let mut pms_parser = PmsParser::new();
     let mut no_data_polls = 0u16;
@@ -161,7 +177,9 @@ fn main() -> ! {
     let mut last_display_refresh = Instant::now() - DISPLAY_REFRESH_INTERVAL;
     let mut display_dirty = true;
 
+    // ===== Main loop =====
     loop {
+        // Poll PMS5003
         match pms_uart.read_buffered(&mut rx_buf) {
             Ok(0) => {
                 no_data_polls = no_data_polls.saturating_add(1);
@@ -210,6 +228,7 @@ fn main() -> ! {
             }
         }
 
+        // Poll BME280/BMP280
         if last_bme_measure.elapsed() >= BME_MEASURE_INTERVAL {
             last_bme_measure = Instant::now();
             if let Some(sensor) = bme.as_mut() {
@@ -241,6 +260,7 @@ fn main() -> ! {
             }
         }
 
+        // Refresh display
         if display_dirty && last_display_refresh.elapsed() >= DISPLAY_REFRESH_INTERVAL {
             last_display_refresh = Instant::now();
             if let Some(display) = tft.as_mut() {

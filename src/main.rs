@@ -4,6 +4,7 @@
 mod air_quality;
 mod bme280;
 mod display;
+mod logger;
 mod pm_rolling;
 mod pms5003;
 
@@ -20,7 +21,6 @@ use esp_hal::{
     time::{Duration, Instant, Rate},
     uart::{Config as UartConfig, RxError, Uart},
 };
-use esp_println::println;
 use mipidsi::{
     interface::SpiInterface,
     models::ILI9341Rgb565,
@@ -48,6 +48,8 @@ fn main() -> ! {
     // ===== Hardware init =====
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
+
+    logger::init(log::LevelFilter::Info);
 
     let mut delay = Delay::new();
 
@@ -101,18 +103,18 @@ fn main() -> ! {
         .init(&mut delay)
     {
         Ok(display) => {
-            println!("2.8in TFT initialized (ILI9341)");
+            log::info!("2.8in TFT initialized (ILI9341)");
             Some(display)
         }
         Err(err) => {
-            println!("2.8in TFT init failed: {:?}", err);
+            log::warn!("2.8in TFT init failed: {:?}", err);
             None
         }
     };
 
     // ===== Sensor startup =====
-    println!("PMS5003 reader started");
-    println!("PMS UART: UART1 @9600");
+    log::info!("PMS5003 reader started");
+    log::info!("PMS UART: UART1 @9600");
 
     let wake_ok = send_pms_command(&mut pms_uart, &mut delay, &PMS_WAKE_CMD, "wake");
     delay.delay_millis(1500);
@@ -123,23 +125,23 @@ fn main() -> ! {
         "active mode",
     );
     if !wake_ok || !active_ok {
-        println!("Continuing without confirmed PMS mode setup");
+        log::warn!("Continuing without confirmed PMS mode setup");
     }
     delay.delay_millis(200);
 
     let bme_address = match detect_bme_address(&mut i2c) {
         Some((address, chip_id)) => {
             if chip_id == 0x60 {
-                println!("BME280 detected at 0x{:02X} (chip id 0x60)", address);
+                log::info!("BME280 detected at 0x{:02X} (chip id 0x60)", address);
             } else if chip_id == 0x58 {
-                println!("BMP280 detected at 0x{:02X} (chip id 0x58)", address);
-                println!("BME280 not detected; humidity readings are not available.");
+                log::info!("BMP280 detected at 0x{:02X} (chip id 0x58)", address);
+                log::warn!("BME280 not detected; humidity readings are not available.");
             }
             Some(address)
         }
         None => {
-            println!("BME280 not detected on 0x76/0x77.");
-            println!("No BMP280 detected either.");
+            log::warn!("BME280 not detected on 0x76/0x77.");
+            log::warn!("No BMP280 detected either.");
             None
         }
     };
@@ -153,7 +155,7 @@ fn main() -> ! {
                 latest_bme = Some(BmeReading::from_measurements(&measurements));
             }
         } else {
-            println!("BME/BMP init failed");
+            log::warn!("BME/BMP init failed");
         }
     }
 
@@ -163,7 +165,7 @@ fn main() -> ! {
         render_tft(display, &mut display_cache, None, None, latest_bme);
     }
 
-    println!("Waiting for valid PMS5003 frames...");
+    log::info!("Waiting for valid PMS5003 frames...");
 
     // ===== Loop state =====
     let mut rx_buf = [0u8; 64];
@@ -184,7 +186,7 @@ fn main() -> ! {
             Ok(0) => {
                 no_data_polls = no_data_polls.saturating_add(1);
                 if no_data_polls >= 1000 {
-                    println!("No UART bytes for ~5s. Check PMS TX, GND, and pin mapping.");
+                    log::warn!("No UART bytes for ~5s. Check PMS TX, GND, and pin mapping.");
                     no_data_polls = 0;
                 }
             }
@@ -201,16 +203,16 @@ fn main() -> ! {
                     let aqi_pm = aqi_pm25_equiv(avg.pm2_5, avg.pm10);
                     latest_aqi_pm = Some(aqi_pm);
                     display_dirty = true;
-                    println!(
+                    log::info!(
                         "ATM ug/m3 (24h glidande): PM1.0={} PM2.5={} PM10={}",
                         avg.pm1_0, avg.pm2_5, avg.pm10
                     );
-                    println!("AQI PM-underlag (24h PM2.5-ekvivalent): {}", aqi_pm);
-                    println!(
+                    log::info!("AQI PM-underlag (24h PM2.5-ekvivalent): {}", aqi_pm);
+                    log::info!(
                         "ATM ug/m3 (rå): PM1.0={} PM2.5={} PM10={}",
                         reading.pm1_0_atm, reading.pm2_5_atm, reading.pm10_atm
                     );
-                    println!(
+                    log::info!(
                         "CF1 ug/m3: PM1.0={} PM2.5={} PM10={}",
                         reading.pm1_0_cf1, reading.pm2_5_cf1, reading.pm10_cf1
                     );
@@ -219,11 +221,11 @@ fn main() -> ! {
             Err(err) => {
                 no_data_polls = 0;
                 match err {
-                    RxError::FifoOverflowed => println!("UART RX FIFO overflow"),
-                    RxError::GlitchOccurred => println!("UART RX glitch detected"),
-                    RxError::FrameFormatViolated => println!("UART RX framing error"),
-                    RxError::ParityMismatch => println!("UART RX parity error"),
-                    _ => println!("UART RX error"),
+                    RxError::FifoOverflowed => log::warn!("UART RX FIFO overflow"),
+                    RxError::GlitchOccurred => log::warn!("UART RX glitch detected"),
+                    RxError::FrameFormatViolated => log::warn!("UART RX framing error"),
+                    RxError::ParityMismatch => log::warn!("UART RX parity error"),
+                    _ => log::warn!("UART RX error"),
                 }
             }
         }
@@ -243,7 +245,7 @@ fn main() -> ! {
                             ""
                         };
                         let temp_abs = reading.temperature_c_x10.unsigned_abs();
-                        println!(
+                        log::info!(
                             "BME: T={}{}.{:01}C RH={}.{:01}% P={}Pa",
                             temp_sign,
                             temp_abs / 10,
@@ -254,7 +256,7 @@ fn main() -> ! {
                         );
                     }
                     Err(_) => {
-                        println!("BME/BMP measure failed");
+                        log::warn!("BME/BMP measure failed");
                     }
                 }
             }

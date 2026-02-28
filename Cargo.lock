@@ -386,6 +386,7 @@ dependencies = [
  "esp-hal",
  "esp-println",
  "heapless",
+ "log",
  "micromath",
  "mipidsi",
  "panic-halt",

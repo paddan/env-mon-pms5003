@@ -105,14 +105,20 @@ fn status_text_bbox_metrics(font: FontToken) -> (i32, i32) {
             if let Some(sample_bb) = sample_dims.bounding_box {
                 let sample_top = sample_bb.top_left.y;
                 let sample_bottom = sample_bb.top_left.y + sample_bb.size.height as i32;
-                let font_top = renderer.get_glyph_bounding_box(VerticalPosition::Top).top_left.y;
+                let font_top = renderer
+                    .get_glyph_bounding_box(VerticalPosition::Top)
+                    .top_left
+                    .y;
                 let top = sample_top.min(font_top);
                 return (top, (sample_bottom - top).max(1));
             }
         }
 
         let fallback_h = renderer.get_default_line_height() as i32;
-        let fallback_top = renderer.get_glyph_bounding_box(VerticalPosition::Top).top_left.y;
+        let fallback_top = renderer
+            .get_glyph_bounding_box(VerticalPosition::Top)
+            .top_left
+            .y;
         (fallback_top, fallback_h.max(1))
     })
 }

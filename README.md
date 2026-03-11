@@ -22,7 +22,7 @@ ESP32-C3 Super Mini side:
 | `3V3`          | BME280 `VIN/VCC`, TFT `VCC`            | 3.3V rail                       |
 | `GPIO0`        | BME280 `SDA`                           | I2C SDA                         |
 | `GPIO1`        | BME280 `SCL`                           | I2C SCL                         |
-| `GPIO5`        | TFT `CS`                               | SPI chip select                 |
+| `GPIO5`        | Not connected                          | Dummy CS in firmware only       |
 | `GPIO6`        | TFT `RESET`                            | Display reset                   |
 | `GPIO7`        | TFT `DC`                               | Data/command                    |
 | `GPIO8`        | TFT `SDI(MOSI)`                        | SPI MOSI                        |
@@ -41,7 +41,7 @@ flowchart LR
     G1[GPIO1 SCL]
     G2[GPIO2 UART RX]
     G3[GPIO3 UART TX]
-    G5[GPIO5 TFT CS]
+    G5[GPIO5 dummy CS]
     G6[GPIO6 TFT RST]
     G7[GPIO7 TFT DC]
     G8[GPIO8 TFT MOSI]
@@ -86,7 +86,6 @@ flowchart LR
   subgraph TFT[TFT 2.8in ILI9341]
     TVCC[VCC 3V3]
     TGND[GND]
-    TCS[CS]
     TRST[RESET]
     TDC[DC]
     TMOSI[SDI MOSI]
@@ -97,7 +96,7 @@ flowchart LR
 
   B33 --> TVCC
   BG --> TGND
-  G5 --> TCS
+  G5 -. not connected .-> TFT
   G6 --> TRST
   G7 --> TDC
   G8 --> TMOSI
@@ -109,26 +108,29 @@ flowchart LR
 
 Given your module pin order:
 
-- `CS`
+- `GND`
+- `VCC`
+- `CLK`
+- `SDI (MOSI)`
 - `RESET`
 - `DC`
-- `SDI (MOSI)`
-- `SCK`
-- `LED`
+- `BLK`
 - `SDO (MISO)`
 
 Use this mapping:
 
-- `CS` -> ESP `GPIO5`
+- `GND` -> ESP `GND`
+- `VCC` -> ESP `3V3`
+- `CLK` -> ESP `GPIO9`
 - `RESET` -> ESP `GPIO6`
 - `DC` -> ESP `GPIO7`
-- `SDI (MOSI)` -> ESP `GPIO8`
-- `SCK` -> ESP `GPIO9`
-- `LED` -> ESP `GPIO10`
+- `SDI (MOSI)` / `MOSI` -> ESP `GPIO8`
+- `BLK` -> ESP `GPIO10`
 - `SDO (MISO)` -> not connected (not used by firmware)
 
 ### TFT module pins not used by firmware
 
+- `CS` (not present on this module; firmware keeps a dummy `CS` on `GPIO5`, leave it unconnected)
 - `SDO(MISO)` (display readback)
 - `T_CLK`, `T_CS`, `T_DIN`, `T_DO`, `T_IRQ` (touch controller)
 - SD-card pins (`SD_CS`, `SD_MOSI`, `SD_MISO`, `SD_SCK`)
@@ -161,7 +163,7 @@ If your PMS cable has no markings:
 
 - Continuously reads and validates PMS5003 frames.
 - Samples BME/BMP every 5 seconds.
-- Redraws the TFT at most every 2 seconds when data changes:
+- Redraws the TFT at most every 250 ms when data changes:
   - PM1.0 / PM2.5 / PM10 (ATM)
   - Particle counts (0.3, 0.5um bins)
   - Temperature, humidity, pressure

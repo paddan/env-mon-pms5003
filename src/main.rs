@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+use core::cell::RefCell;
+
 mod air_quality;
 mod bme280;
 mod display;
@@ -9,7 +11,7 @@ mod pm_rolling;
 mod pms5003;
 
 use ::bme280::i2c::BME280;
-use embedded_hal_bus::spi::ExclusiveDevice;
+use embedded_hal_bus::{i2c::RefCellDevice, spi::ExclusiveDevice};
 use esp_hal::{
     clock::CpuClock,
     delay::Delay,
@@ -24,7 +26,7 @@ use esp_hal::{
 use mipidsi::{
     interface::SpiInterface,
     models::ILI9341Rgb565,
-    options::{ColorOrder, Orientation},
+    options::{ColorOrder, Orientation, Rotation},
     Builder,
 };
 use panic_halt as _;
@@ -54,16 +56,16 @@ fn main() -> ! {
     let mut delay = Delay::new();
 
     // ===== Pin map =====
-    let pms_rx   = peripherals.GPIO2;
-    let pms_tx   = peripherals.GPIO3;
-    let bme_sda  = peripherals.GPIO0;
-    let bme_scl  = peripherals.GPIO1;
-    let tft_sck  = peripherals.GPIO9;
+    let pms_rx = peripherals.GPIO2;
+    let pms_tx = peripherals.GPIO3;
+    let bme_sda = peripherals.GPIO0;
+    let bme_scl = peripherals.GPIO1;
+    let tft_sck = peripherals.GPIO9;
     let tft_mosi = peripherals.GPIO8;
-    let tft_cs   = peripherals.GPIO5;
-    let tft_rst  = peripherals.GPIO6;
-    let tft_dc   = peripherals.GPIO7;
-    let tft_led  = peripherals.GPIO10;
+    let tft_cs = peripherals.GPIO5;
+    let tft_rst = peripherals.GPIO6;
+    let tft_dc = peripherals.GPIO7;
+    let tft_led = peripherals.GPIO10;
 
     let uart_config = UartConfig::default().with_baudrate(9_600);
     let mut pms_uart = Uart::new(peripherals.UART1, uart_config)
@@ -72,10 +74,11 @@ fn main() -> ! {
         .with_tx(pms_tx);
 
     let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(100));
-    let mut i2c = I2c::new(peripherals.I2C0, i2c_config)
+    let i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("Failed to initialize I2C0")
         .with_sda(bme_sda)
         .with_scl(bme_scl);
+    let i2c_bus = RefCell::new(i2c);
 
     let spi_config = SpiConfig::default()
         .with_frequency(Rate::from_mhz(40))
@@ -85,9 +88,9 @@ fn main() -> ! {
         .with_sck(tft_sck)
         .with_mosi(tft_mosi);
 
-    let tft_cs  = Output::new(tft_cs,  Level::High, OutputConfig::default());
+    let tft_cs = Output::new(tft_cs, Level::High, OutputConfig::default());
     let tft_rst = Output::new(tft_rst, Level::High, OutputConfig::default());
-    let tft_dc  = Output::new(tft_dc,  Level::Low,  OutputConfig::default());
+    let tft_dc = Output::new(tft_dc, Level::Low, OutputConfig::default());
     let _tft_led = Output::new(tft_led, Level::High, OutputConfig::default());
 
     let tft_spi =
@@ -98,7 +101,11 @@ fn main() -> ! {
     let mut tft = match Builder::new(ILI9341Rgb565, tft_di)
         .reset_pin(tft_rst)
         .display_size(240, 320)
-        .orientation(Orientation::new().flip_horizontal())
+        .orientation(
+            Orientation::new()
+                .rotate(Rotation::Deg180)
+                .flip_horizontal(),
+        )
         .color_order(ColorOrder::Bgr)
         .init(&mut delay)
     {
@@ -129,7 +136,8 @@ fn main() -> ! {
     }
     delay.delay_millis(200);
 
-    let bme_address = match detect_bme_address(&mut i2c) {
+    let mut i2c_probe = RefCellDevice::new(&i2c_bus);
+    let bme_address = match detect_bme_address(&mut i2c_probe) {
         Some((address, chip_id)) => {
             if chip_id == 0x60 {
                 log::info!("BME280 detected at 0x{:02X} (chip id 0x60)", address);
@@ -146,7 +154,7 @@ fn main() -> ! {
         }
     };
 
-    let mut bme = bme_address.map(|address| BME280::new(i2c, address));
+    let mut bme = bme_address.map(|address| BME280::new(RefCellDevice::new(&i2c_bus), address));
 
     let mut latest_bme = None;
     if let Some(sensor) = bme.as_mut() {
@@ -205,16 +213,22 @@ fn main() -> ! {
                     display_dirty = true;
                     log::info!(
                         "ATM ug/m3 (24h glidande): PM1.0={} PM2.5={} PM10={}",
-                        avg.pm1_0, avg.pm2_5, avg.pm10
+                        avg.pm1_0,
+                        avg.pm2_5,
+                        avg.pm10
                     );
                     log::info!("AQI PM-underlag (24h PM2.5-ekvivalent): {}", aqi_pm);
                     log::info!(
                         "ATM ug/m3 (rå): PM1.0={} PM2.5={} PM10={}",
-                        reading.pm1_0_atm, reading.pm2_5_atm, reading.pm10_atm
+                        reading.pm1_0_atm,
+                        reading.pm2_5_atm,
+                        reading.pm10_atm
                     );
                     log::info!(
                         "CF1 ug/m3: PM1.0={} PM2.5={} PM10={}",
-                        reading.pm1_0_cf1, reading.pm2_5_cf1, reading.pm10_cf1
+                        reading.pm1_0_cf1,
+                        reading.pm2_5_cf1,
+                        reading.pm10_cf1
                     );
                 }
             }

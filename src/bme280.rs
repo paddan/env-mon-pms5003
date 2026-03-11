@@ -1,5 +1,5 @@
 use ::bme280::Measurements;
-use esp_hal::{i2c::master::I2c, Blocking};
+use embedded_hal::i2c::I2c;
 
 #[derive(Clone, Copy)]
 pub struct BmeReading {
@@ -22,7 +22,10 @@ impl BmeReading {
     }
 }
 
-pub fn detect_bme_address(i2c: &mut I2c<'_, Blocking>) -> Option<(u8, u8)> {
+pub fn detect_bme_address<I>(i2c: &mut I) -> Option<(u8, u8)>
+where
+    I: I2c,
+{
     let mut chip_id = [0u8; 1];
 
     for address in [0x76u8, 0x77u8] {

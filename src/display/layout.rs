@@ -1,4 +1,6 @@
-use super::{font_height, TextStyleCfg, STYLE_CLIMATE_LABEL, STYLE_PARTICLE_LABEL, STYLE_PARTICLE_VALUE};
+use super::{
+    font_height, TextStyleCfg, STYLE_CLIMATE_LABEL, STYLE_PARTICLE_LABEL, STYLE_PARTICLE_VALUE,
+};
 
 pub(super) const CLIMATE_VALUE_GAP_Y: i32 = 1;
 const CLIMATE_VALUE_CLEAR_PAD_TOP: i32 = 2;
@@ -127,8 +129,8 @@ pub(super) fn climate_value_field(x: i32, clear_w: u32, style: TextStyleCfg) -> 
     let y = climate_value_y();
     let text_h = font_height(style.font);
     let clear_y = y - CLIMATE_VALUE_CLEAR_PAD_TOP;
-    let clear_h = (text_h + CLIMATE_VALUE_CLEAR_PAD_TOP + CLIMATE_VALUE_CLEAR_PAD_BOTTOM).max(1)
-        as u32;
+    let clear_h =
+        (text_h + CLIMATE_VALUE_CLEAR_PAD_TOP + CLIMATE_VALUE_CLEAR_PAD_BOTTOM).max(1) as u32;
 
     FieldCfg {
         x,

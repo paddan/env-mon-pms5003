@@ -19,11 +19,7 @@ use layout::{
 };
 use text::{centered_status_text_pos, draw_text_aa, font_height, status_text_clear_rect};
 
-use crate::{
-    air_quality::level_text_sv,
-    bme280::BmeReading,
-    pms5003::Pms5003Reading,
-};
+use crate::{air_quality::level_text_sv, bme280::BmeReading, pms5003::Pms5003Reading};
 
 pub type DisplayColor = Rgb565;
 
@@ -334,5 +330,3 @@ fn expand_rect(area: Rectangle, pad: i32) -> Rectangle {
         ),
     )
 }
-
-

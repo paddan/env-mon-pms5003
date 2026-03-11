@@ -8,11 +8,8 @@ use micromath::F32Ext;
 use crate::air_quality::ratio_from_pm25;
 
 use super::{
-    DisplayCache,
-    DisplayColor, TextStyleCfg,
-    BG_COLOR, TEXT_WHITE,
-    clear_rect,
-    centered_status_text_pos, draw_text_aa, status_text_clear_rect,
+    centered_status_text_pos, clear_rect, draw_text_aa, status_text_clear_rect, DisplayCache,
+    DisplayColor, TextStyleCfg, BG_COLOR, TEXT_WHITE,
 };
 
 // ===== Gauge appearance config =====
@@ -66,12 +63,30 @@ struct GaugeSegmentCfg {
 }
 
 const GAUGE_SEGMENTS: [GaugeSegmentCfg; 6] = [
-    GaugeSegmentCfg { sweep_deg:  5.0, color: GREEN    },
-    GaugeSegmentCfg { sweep_deg: 10.0, color: LIME     },
-    GaugeSegmentCfg { sweep_deg: 35.0, color: super::YELLOW  },
-    GaugeSegmentCfg { sweep_deg: 40.0, color: ORANGE   },
-    GaugeSegmentCfg { sweep_deg: 50.0, color: RED      },
-    GaugeSegmentCfg { sweep_deg: 40.0, color: DEEP_RED },
+    GaugeSegmentCfg {
+        sweep_deg: 5.0,
+        color: GREEN,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 10.0,
+        color: LIME,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 35.0,
+        color: super::YELLOW,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 40.0,
+        color: ORANGE,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 50.0,
+        color: RED,
+    },
+    GaugeSegmentCfg {
+        sweep_deg: 40.0,
+        color: DEEP_RED,
+    },
 ];
 // ===== End gauge appearance config =====
 

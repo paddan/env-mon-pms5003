@@ -1,5 +1,5 @@
 [package]
-name = "env-mon-display"
+name = "env-mon-pms5003"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"
@@ -20,7 +20,7 @@ panic-halt = "1.0"
 u8g2-fonts = "0.6.0"
 
 [[bin]]
-name = "env-mon-display"
+name = "env-mon-pms5003"
 path = "src/main.rs"
 test = false
 bench = false
@@ -30,4 +30,4 @@ opt-level = "s"
 
 [profile.dev]
 debug = true
-opt-level = "z"
+opt-level = 1

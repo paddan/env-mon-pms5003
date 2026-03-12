@@ -80,7 +80,7 @@ pub struct DisplayCache {
     temp: String<16>,
     hum: String<16>,
     pressure: String<16>,
-    status_text: String<26>,
+    status_text: String<28>,
     pm25: String<8>,
     pm1: String<8>,
     pm10: String<8>,
@@ -192,7 +192,6 @@ fn draw_dynamic<D>(
             ""
         };
         let temp_abs = reading.temperature_c_x10.unsigned_abs();
-        let pressure_hpa_x10 = reading.pressure_pa / 10;
         let humidity_pct = (reading.humidity_pct_x10 + 5) / 10;
 
         let _ = write!(
@@ -203,7 +202,7 @@ fn draw_dynamic<D>(
             temp_abs % 10
         );
         let _ = write!(hum_text, "{} %", humidity_pct);
-        let _ = write!(pressure_text, "{} hPa", pressure_hpa_x10 / 10);
+        let _ = write!(pressure_text, "{} hPa", reading.pressure_pa / 100);
     } else {
         let _ = temp_text.push_str("--.- C");
         let _ = hum_text.push_str("-- %");

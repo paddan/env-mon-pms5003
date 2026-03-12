@@ -4,7 +4,7 @@ set -euo pipefail
 PORT="${1:-${PORT:-}}"
 CHIP="esp32c3"
 TARGET="riscv32imc-unknown-none-elf"
-BIN="target/${TARGET}/release/env-mon-display"
+BIN="target/${TARGET}/release/env-mon-pms5003"
 
 detect_serial_port() {
   local ports=()

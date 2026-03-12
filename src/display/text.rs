@@ -11,7 +11,7 @@ const STATUS_TEXT_GAP_Y: i32 = 16;
 const STATUS_TEXT_CLEAR_PAD_X: i32 = 2;
 const STATUS_TEXT_CLEAR_PAD_TOP: i32 = 1;
 const STATUS_TEXT_CLEAR_PAD_BOTTOM: i32 = 0;
-const STATUS_TEXT_MAX_CHARS: i32 = 20;
+const STATUS_TEXT_MAX_CHARS: i32 = 26;
 
 // Single source of truth for FontToken -> concrete u8g2 font mapping.
 macro_rules! with_font {

@@ -375,7 +375,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "env-mon-display"
+name = "env-mon-pms5003"
 version = "0.1.0"
 dependencies = [
  "bme280",

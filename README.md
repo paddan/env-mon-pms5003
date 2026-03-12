@@ -162,11 +162,31 @@ If your PMS cable has no markings:
 ## What the firmware does
 
 - Continuously reads and validates PMS5003 frames.
+- Maintains a 24-hour rolling average of PM1.0 / PM2.5 / PM10 (one minute-bucket per minute, 1440 buckets max).
 - Samples BME/BMP every 5 seconds.
 - Redraws the TFT at most every 250 ms when data changes:
-  - PM1.0 / PM2.5 / PM10 (ATM)
-  - Particle counts (0.3, 0.5um bins)
+  - Semicircular EU AQI gauge driven by the 24 h PM2.5/PM10 average (worst band wins)
+  - Air quality label in Swedish (see [EU AQI bands](#eu-aqi-bands) below)
+  - PM1.0 / PM2.5 / PM10 (ATM, raw latest frame)
+  - Particle counts (0.3, 0.5 µm bins)
   - Temperature, humidity, pressure
+
+## EU AQI bands
+
+The gauge and status label follow the **European Air Quality Index** thresholds for PM2.5 and PM10 (24-hour averages). The worse of the two bands determines the gauge position and label.
+
+| Band | Swedish label | PM2.5 (µg/m³) | PM10 (µg/m³) |
+| :---- | :------------ | :------------ | :----------- |
+| Good | GOD LUFTKVALITET | 0 – 5 | 0 – 10 |
+| Fair | GANSKA GOD LUFTKVALITET | 6 – 15 | 11 – 25 |
+| Moderate | MÅTTLIGT GOD LUFTKVALITET | 16 – 50 | 26 – 90 |
+| Poor | DÅLIG LUFTKVALITET | 51 – 90 | 91 – 180 |
+| Very poor | MYCKET DÅLIG LUFTKVALITET | 91 – 140 | 181 – 280 |
+| Extremely poor | EXTREMT DÅLIG LUFTKVALITET | > 140 | > 280 |
+
+When PM2.5 drives the band the raw PM2.5 value positions the needle precisely. When PM10 drives the band a representative midpoint for that band on the PM2.5 scale is used instead.
+
+All on-screen labels are in **Swedish**.
 
 ## Toolchain setup (once)
 

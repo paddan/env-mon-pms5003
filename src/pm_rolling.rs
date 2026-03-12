@@ -70,32 +70,13 @@ impl Pm24hRollingAverage {
             return;
         }
 
-        // Count the number of complete minutes that elapsed. Using a comparison
-        // loop avoids depending on Duration::to_millis() availability.
-        let mut elapsed_mins: usize = 1;
-        while elapsed >= MINUTE * ((elapsed_mins + 1) as u32) && elapsed_mins < WINDOW_MINUTES {
-            elapsed_mins += 1;
-        }
-
         // Finalize whatever accumulated in the current minute bucket.
         self.finalize_minute();
 
         // For each additional minute that passed with no sensor data, evict the
         // corresponding oldest stored bucket so the window stays time-correct
         // across gaps (sensor disconnects, power interruptions, etc.).
-        // When the gap is strictly greater than the full window, evict everything
-        // in the ring (including any entry just finalized above) so no pre-gap
-        // data survives. elapsed_mins is capped at WINDOW_MINUTES by the loop
-        // above, so we compare elapsed directly to distinguish "> 24 h" from
-        // "exactly 24 h" (the latter keeps the just-finalized bucket).
-        let missed = if elapsed > MINUTE * WINDOW_MINUTES as u32 {
-            self.window_len
-        } else {
-            // Cap at window_len - 1 so the just-finalized (newest) entry is
-            // never evicted; elapsed_mins - 1 can exceed window_len when the
-            // stored history is shorter than the gap.
-            elapsed_mins.saturating_sub(1).min(self.window_len.saturating_sub(1))
-        };
+        let missed = missed_bucket_count(elapsed, self.window_len);
         for _ in 0..missed {
             self.evict_oldest();
         }
@@ -111,8 +92,12 @@ impl Pm24hRollingAverage {
         }
         let oldest = (self.window_pos + WINDOW_MINUTES - self.window_len) % WINDOW_MINUTES;
         self.sum_pm1 = self.sum_pm1.saturating_sub(self.pm1_window[oldest] as u64);
-        self.sum_pm25 = self.sum_pm25.saturating_sub(self.pm25_window[oldest] as u64);
-        self.sum_pm10 = self.sum_pm10.saturating_sub(self.pm10_window[oldest] as u64);
+        self.sum_pm25 = self
+            .sum_pm25
+            .saturating_sub(self.pm25_window[oldest] as u64);
+        self.sum_pm10 = self
+            .sum_pm10
+            .saturating_sub(self.pm10_window[oldest] as u64);
         self.window_len -= 1;
     }
 
@@ -185,5 +170,85 @@ impl Pm24hRollingAverage {
             pm2_5: ((self.sum_pm25 + denom / 2) / denom) as u16,
             pm10: ((self.sum_pm10 + denom / 2) / denom) as u16,
         }
+    }
+}
+
+fn elapsed_complete_minutes(elapsed: Duration) -> usize {
+    // Count the number of complete minutes that elapsed. Using a comparison
+    // loop avoids depending on Duration::to_millis() availability.
+    let mut elapsed_mins: usize = 1;
+    while elapsed >= MINUTE * ((elapsed_mins + 1) as u32) && elapsed_mins < WINDOW_MINUTES {
+        elapsed_mins += 1;
+    }
+    elapsed_mins
+}
+
+fn missed_bucket_count(elapsed: Duration, window_len: usize) -> usize {
+    debug_assert!(elapsed >= MINUTE);
+
+    // When the gap is strictly greater than the full window, evict everything
+    // in the ring (including any entry just finalized above) so no pre-gap
+    // data survives. For shorter gaps, keep the just-finalized newest entry.
+    if elapsed > MINUTE * WINDOW_MINUTES as u32 {
+        return window_len;
+    }
+
+    elapsed_complete_minutes(elapsed)
+        .saturating_sub(1)
+        .min(window_len.saturating_sub(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn minutes(count: u32) -> Duration {
+        MINUTE * count
+    }
+
+    #[test]
+    fn exact_one_minute_gap_only_finalizes_current_bucket() {
+        assert_eq!(missed_bucket_count(minutes(1), 5), 0);
+    }
+
+    #[test]
+    fn exact_full_window_gap_keeps_newest_bucket() {
+        assert_eq!(
+            missed_bucket_count(minutes(WINDOW_MINUTES as u32), WINDOW_MINUTES),
+            WINDOW_MINUTES - 1
+        );
+    }
+
+    #[test]
+    fn gap_longer_than_full_window_evicts_everything() {
+        assert_eq!(
+            missed_bucket_count(minutes(WINDOW_MINUTES as u32) + Duration::from_secs(1), 12),
+            12
+        );
+    }
+
+    #[test]
+    fn short_history_gap_does_not_evict_just_finalized_bucket() {
+        assert_eq!(missed_bucket_count(minutes(WINDOW_MINUTES as u32), 10), 9);
+    }
+
+    #[test]
+    fn evict_oldest_removes_wrapped_ring_head() {
+        let mut rolling = Pm24hRollingAverage::new();
+        rolling.window_pos = WINDOW_MINUTES - 1;
+
+        rolling.push_minute(1, 10, 100);
+        rolling.push_minute(2, 20, 200);
+        rolling.push_minute(3, 30, 300);
+
+        rolling.evict_oldest();
+
+        assert_eq!(rolling.window_len, 2);
+        assert_eq!(rolling.sum_pm1, 5);
+        assert_eq!(rolling.sum_pm25, 50);
+        assert_eq!(rolling.sum_pm10, 500);
+        assert_eq!(rolling.stored_average().pm1_0, 3);
+        assert_eq!(rolling.stored_average().pm2_5, 25);
+        assert_eq!(rolling.stored_average().pm10, 250);
     }
 }

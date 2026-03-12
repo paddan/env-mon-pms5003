@@ -138,18 +138,12 @@ fn main() -> ! {
 
     let mut i2c_probe = RefCellDevice::new(&i2c_bus);
     let bme_address = match detect_bme_address(&mut i2c_probe) {
-        Some((address, chip_id)) => {
-            if chip_id == 0x60 {
-                log::info!("BME280 detected at 0x{:02X} (chip id 0x60)", address);
-            } else if chip_id == 0x58 {
-                log::info!("BMP280 detected at 0x{:02X} (chip id 0x58)", address);
-                log::warn!("BME280 not detected; humidity readings are not available.");
-            }
+        Some(address) => {
+            log::info!("BME280 detected at 0x{:02X} (chip id 0x60)", address);
             Some(address)
         }
         None => {
             log::warn!("BME280 not detected on 0x76/0x77.");
-            log::warn!("No BMP280 detected either.");
             None
         }
     };
@@ -163,7 +157,7 @@ fn main() -> ! {
                 latest_bme = Some(BmeReading::from_measurements(&measurements));
             }
         } else {
-            log::warn!("BME/BMP init failed");
+            log::warn!("BME280 init failed");
         }
     }
 
@@ -244,7 +238,7 @@ fn main() -> ! {
             }
         }
 
-        // Poll BME280/BMP280
+        // Poll BME280
         if last_bme_measure.elapsed() >= BME_MEASURE_INTERVAL {
             last_bme_measure = Instant::now();
             if let Some(sensor) = bme.as_mut() {
@@ -270,7 +264,7 @@ fn main() -> ! {
                         );
                     }
                     Err(_) => {
-                        log::warn!("BME/BMP measure failed");
+                        log::warn!("BME280 measure failed");
                     }
                 }
             }

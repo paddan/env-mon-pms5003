@@ -22,21 +22,17 @@ impl BmeReading {
     }
 }
 
-pub fn detect_bme_address<I>(i2c: &mut I) -> Option<(u8, u8)>
+const BME280_CHIP_ID: u8 = 0x60;
+
+pub fn detect_bme_address<I>(i2c: &mut I) -> Option<u8>
 where
     I: I2c,
 {
     let mut chip_id = [0u8; 1];
 
-    for address in [0x76u8, 0x77u8] {
-        if i2c.write_read(address, &[0xD0], &mut chip_id).is_ok()
-            && (chip_id[0] == 0x60 || chip_id[0] == 0x58)
-        {
-            return Some((address, chip_id[0]));
-        }
-    }
-
-    None
+    [0x76u8, 0x77u8].into_iter().find(|&address| {
+        i2c.write_read(address, &[0xD0], &mut chip_id).is_ok() && chip_id[0] == BME280_CHIP_ID
+    })
 }
 
 fn float_to_i16_tenths(value: f32) -> i16 {

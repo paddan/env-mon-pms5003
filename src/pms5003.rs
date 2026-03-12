@@ -147,7 +147,8 @@ pub fn send_pms_command(
             Err(_) => {
                 log::warn!(
                     "PMS command failed: {} (attempt {}/3)",
-                    command_name, attempt
+                    command_name,
+                    attempt
                 );
                 delay.delay_millis(100);
             }

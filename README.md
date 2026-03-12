@@ -157,13 +157,13 @@ If your PMS cable has no markings:
 ### BME280 notes
 
 - Firmware probes both `0x76` and `0x77` automatically.
-- If your board is actually BMP280 (chip ID `0x58`), pressure/temp still work but humidity is not valid.
+- Only a real `BME280` (chip ID `0x60`) is accepted.
 
 ## What the firmware does
 
 - Continuously reads and validates PMS5003 frames.
 - Maintains a 24-hour rolling average of PM1.0 / PM2.5 / PM10 (one minute-bucket per minute, 1440 buckets max).
-- Samples BME/BMP every 5 seconds.
+- Samples BME280 every 5 seconds.
 - Redraws the TFT at most every 250 ms when data changes:
   - Semicircular EU AQI gauge driven by the 24 h PM2.5/PM10 average (worst band wins)
   - Air quality label in Swedish (see [EU AQI bands](#eu-aqi-bands) below)

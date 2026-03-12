@@ -57,16 +57,63 @@ impl Pm24hRollingAverage {
     }
 
     fn roll_minute_if_needed(&mut self, now: Instant) {
-        match self.minute_start {
+        let start = match self.minute_start {
             None => {
                 self.minute_start = Some(now);
+                return;
             }
-            Some(start) if start.elapsed() >= MINUTE => {
-                self.finalize_minute();
-                self.minute_start = Some(now);
-            }
-            Some(_) => {}
+            Some(s) => s,
+        };
+
+        let elapsed = start.elapsed();
+        if elapsed < MINUTE {
+            return;
         }
+
+        // Count the number of complete minutes that elapsed. Using a comparison
+        // loop avoids depending on Duration::to_millis() availability.
+        let mut elapsed_mins: usize = 1;
+        while elapsed >= MINUTE * ((elapsed_mins + 1) as u32) && elapsed_mins < WINDOW_MINUTES {
+            elapsed_mins += 1;
+        }
+
+        // Finalize whatever accumulated in the current minute bucket.
+        self.finalize_minute();
+
+        // For each additional minute that passed with no sensor data, evict the
+        // corresponding oldest stored bucket so the window stays time-correct
+        // across gaps (sensor disconnects, power interruptions, etc.).
+        // When the gap is strictly greater than the full window, evict everything
+        // in the ring (including any entry just finalized above) so no pre-gap
+        // data survives. elapsed_mins is capped at WINDOW_MINUTES by the loop
+        // above, so we compare elapsed directly to distinguish "> 24 h" from
+        // "exactly 24 h" (the latter keeps the just-finalized bucket).
+        let missed = if elapsed > MINUTE * WINDOW_MINUTES as u32 {
+            self.window_len
+        } else {
+            // Cap at window_len - 1 so the just-finalized (newest) entry is
+            // never evicted; elapsed_mins - 1 can exceed window_len when the
+            // stored history is shorter than the gap.
+            elapsed_mins.saturating_sub(1).min(self.window_len.saturating_sub(1))
+        };
+        for _ in 0..missed {
+            self.evict_oldest();
+        }
+
+        self.minute_start = Some(now);
+    }
+
+    // Remove the oldest minute bucket from the ring buffer without adding new
+    // data. Used to advance the window during periods with no sensor readings.
+    fn evict_oldest(&mut self) {
+        if self.window_len == 0 {
+            return;
+        }
+        let oldest = (self.window_pos + WINDOW_MINUTES - self.window_len) % WINDOW_MINUTES;
+        self.sum_pm1 = self.sum_pm1.saturating_sub(self.pm1_window[oldest] as u64);
+        self.sum_pm25 = self.sum_pm25.saturating_sub(self.pm25_window[oldest] as u64);
+        self.sum_pm10 = self.sum_pm10.saturating_sub(self.pm10_window[oldest] as u64);
+        self.window_len -= 1;
     }
 
     fn finalize_minute(&mut self) {

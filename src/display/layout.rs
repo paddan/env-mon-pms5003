@@ -38,7 +38,7 @@ pub(super) const LABEL_TEMP: LabelCfg = LabelCfg {
 pub(super) const LABEL_RH: LabelCfg = LabelCfg {
     x: 198,
     y: 2,
-    text: "RH",
+    text: "Fukt",
     style: STYLE_CLIMATE_LABEL,
 };
 pub(super) const LABEL_PRESSURE: LabelCfg = LabelCfg {

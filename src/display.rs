@@ -31,6 +31,7 @@ const TEXT_WHITE: DisplayColor = DisplayColor::new(24, 40, 24);
 const NEON_GREEN: DisplayColor = DisplayColor::new(0, 63, 12);
 const BLUE: DisplayColor = DisplayColor::new(10, 34, 31);
 const YELLOW: DisplayColor = DisplayColor::new(31, 58, 0);
+const RED: DisplayColor = DisplayColor::new(31, 12, 0);
 
 // Fonts
 #[allow(dead_code)]
@@ -80,6 +81,9 @@ pub struct DisplayCache {
     temp: String<16>,
     hum: String<16>,
     pressure: String<16>,
+    temp_color: DisplayColor,
+    hum_color: DisplayColor,
+    pressure_color: DisplayColor,
     status_text: String<28>,
     pm25: String<8>,
     pm1: String<8>,
@@ -96,6 +100,9 @@ impl DisplayCache {
             temp: String::new(),
             hum: String::new(),
             pressure: String::new(),
+            temp_color: BG_COLOR,
+            hum_color: BG_COLOR,
+            pressure_color: BG_COLOR,
             status_text: String::new(),
             pm25: String::new(),
             pm1: String::new(),
@@ -114,6 +121,9 @@ impl DisplayCache {
         self.temp.clear();
         self.hum.clear();
         self.pressure.clear();
+        self.temp_color = BG_COLOR;
+        self.hum_color = BG_COLOR;
+        self.pressure_color = BG_COLOR;
         self.status_text.clear();
         self.pm25.clear();
         self.pm1.clear();
@@ -188,6 +198,39 @@ where
     draw_label(display, LABEL_PM05);
 }
 
+// EN 16798-1:2019 Category II: 20-26 °C
+fn climate_color_temp(temperature_c_x10: i16) -> DisplayColor {
+    if temperature_c_x10 < 200 {
+        BLUE
+    } else if temperature_c_x10 <= 260 {
+        NEON_GREEN
+    } else {
+        RED
+    }
+}
+
+// EN 16798-1:2019 Category II: 25-60 % RH
+fn climate_color_hum(humidity_pct_x10: u16) -> DisplayColor {
+    if humidity_pct_x10 < 250 {
+        BLUE
+    } else if humidity_pct_x10 <= 600 {
+        NEON_GREEN
+    } else {
+        RED
+    }
+}
+
+fn climate_color_pressure(pressure_pa: u32) -> DisplayColor {
+    let hpa = pressure_pa / 100;
+    if hpa < 1000 {
+        BLUE
+    } else if hpa <= 1025 {
+        NEON_GREEN
+    } else {
+        RED
+    }
+}
+
 fn draw_dynamic<D>(
     display: &mut D,
     cache: &mut DisplayCache,
@@ -201,7 +244,7 @@ fn draw_dynamic<D>(
     let mut hum_text: String<16> = String::new();
     let mut pressure_text: String<16> = String::new();
 
-    if let Some(reading) = bme {
+    let (t_color, h_color, p_color) = if let Some(reading) = bme {
         let sign = if reading.temperature_c_x10 < 0 {
             "-"
         } else {
@@ -219,10 +262,29 @@ fn draw_dynamic<D>(
         );
         let _ = write!(hum_text, "{} %", humidity_pct);
         let _ = write!(pressure_text, "{} hPa", reading.pressure_pa / 100);
+        (
+            climate_color_temp(reading.temperature_c_x10),
+            climate_color_hum(reading.humidity_pct_x10),
+            climate_color_pressure(reading.pressure_pa),
+        )
     } else {
         let _ = temp_text.push_str("--.- C");
         let _ = hum_text.push_str("-- %");
         let _ = pressure_text.push_str("---- hPa");
+        (TEXT_WHITE, TEXT_WHITE, TEXT_WHITE)
+    };
+
+    if t_color != cache.temp_color {
+        cache.temp.clear();
+        cache.temp_color = t_color;
+    }
+    if h_color != cache.hum_color {
+        cache.hum.clear();
+        cache.hum_color = h_color;
+    }
+    if p_color != cache.pressure_color {
+        cache.pressure.clear();
+        cache.pressure_color = p_color;
     }
 
     let mut pm25_text: String<8> = String::new();
@@ -247,17 +309,17 @@ fn draw_dynamic<D>(
     let field_temp = climate_value_field(
         LABEL_TEMP.x,
         CLIMATE_TEMP_VALUE_CLEAR_W,
-        STYLE_CLIMATE_TEMP_VALUE,
+        TextStyleCfg { font: STYLE_CLIMATE_TEMP_VALUE.font, color: t_color },
     );
     let field_pressure = climate_value_field(
         LABEL_PRESSURE.x,
         CLIMATE_PRESSURE_VALUE_CLEAR_W,
-        STYLE_CLIMATE_PRESSURE_VALUE,
+        TextStyleCfg { font: STYLE_CLIMATE_PRESSURE_VALUE.font, color: p_color },
     );
     let field_hum = climate_value_field(
         LABEL_RH.x,
         CLIMATE_HUM_VALUE_CLEAR_W,
-        STYLE_CLIMATE_HUM_VALUE,
+        TextStyleCfg { font: STYLE_CLIMATE_HUM_VALUE.font, color: h_color },
     );
 
     update_field_if_changed(display, &mut cache.temp, temp_text.as_str(), field_temp);

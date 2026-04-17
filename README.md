@@ -169,7 +169,17 @@ If your PMS cable has no markings:
   - Air quality label in Swedish (see [EU AQI bands](#eu-aqi-bands) below)
   - PM1.0 / PM2.5 / PM10 (ATM, raw latest frame)
   - Particle counts (0.3, 0.5 µm bins)
-  - Temperature, humidity, pressure
+  - Temperature, humidity, pressure — colour-coded by comfort level (see [Climate indicator colours](#climate-indicator-colours) below)
+
+## Climate indicator colours
+
+Temperature and humidity follow **EN 16798-1:2019 Category II** (normal residential/office). Pressure has no EU comfort standard; the range is based on typical sea-level atmospheric variation.
+
+| Colour | Meaning | Temp | Humidity | Pressure |
+| :----- | :------ | :--- | :------- | :------- |
+| Blue | Below normal | < 20 °C | < 25 % RH | < 1000 hPa |
+| Green | Normal | 20 – 26 °C | 25 – 60 % RH | 1000 – 1025 hPa |
+| Red | Above normal | > 26 °C | > 60 % RH | > 1025 hPa |
 
 ## EU AQI bands
 

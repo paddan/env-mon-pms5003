@@ -124,42 +124,34 @@ pub(super) fn update_status_if_changed<D>(
         _ => true,
     };
 
-    // Keep text and pointer synchronized: redraw both only when the pointer redraws.
-    if !should_redraw_needle {
-        return;
-    }
-
-    let should_erase_needle = prev_angle.is_some();
-    let should_draw_needle = next_angle.is_some();
-
-    if should_erase_needle {
+    if should_redraw_needle {
         if let Some(angle) = prev_angle {
             erase_status_needle(display, angle);
             restore_gauge_slice(display, angle);
         }
     }
 
-    let value_style = TextStyleCfg {
-        font: STYLE_STATUS_TEXT.font,
-        color: pm25
-            .map(|value| brighten(gauge_gradient_color(ratio_from_pm25(value)), 6))
-            .unwrap_or(TEXT_WHITE),
-    };
-    let font = value_style.font;
-    clear_rect(display, status_text_clear_rect(font, GAUGE_CENTER));
+    if text_changed || should_redraw_needle {
+        let value_style = TextStyleCfg {
+            font: STYLE_STATUS_TEXT.font,
+            color: pm25
+                .map(|value| brighten(gauge_gradient_color(ratio_from_pm25(value)), 6))
+                .unwrap_or(TEXT_WHITE),
+        };
+        let font = value_style.font;
+        clear_rect(display, status_text_clear_rect(font, GAUGE_CENTER));
+        let text_pos = centered_status_text_pos(font, text, GAUGE_CENTER);
+        draw_text_aa(display, text_pos, font, value_style.color, text);
+        cache.status_text.clear();
+        let _ = cache.status_text.push_str(text); // String<28> fits all level_text_sv strings (max 27 bytes)
+    }
 
-    let text_pos = centered_status_text_pos(font, text, GAUGE_CENTER);
-    draw_text_aa(display, text_pos, font, value_style.color, text);
-
-    if should_draw_needle {
+    if should_redraw_needle {
         if let Some(angle) = next_angle {
             draw_status_needle(display, angle);
         }
+        cache.status_pm25 = pm25;
     }
-
-    cache.status_text.clear();
-    let _ = cache.status_text.push_str(text); // String<28> fits all level_text_sv strings (max 27 bytes)
-    cache.status_pm25 = pm25;
 }
 
 fn draw_arc_band<D>(display: &mut D, start_deg: f32, sweep_deg: f32, color: DisplayColor)

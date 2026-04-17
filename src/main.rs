@@ -286,9 +286,10 @@ fn main() -> ! {
             }
         }
 
-        // Periodic forced full display refresh — recovers from SPI corruption or missed draws
+        // Periodic forced field refresh — recovers from silent draw failures without
+        // a full screen clear. Resets text caches so all fields are redrawn next render.
         if last_full_refresh.elapsed() >= DISPLAY_FORCE_REFRESH_INTERVAL {
-            display_cache = DisplayCache::new();
+            display_cache.reset_dynamic();
             last_full_refresh = Instant::now();
             display_dirty = true;
         }

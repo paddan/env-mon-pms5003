@@ -105,6 +105,22 @@ impl DisplayCache {
             status_pm25: None,
         }
     }
+
+    /// Clears dynamic field caches without resetting the static layout flag.
+    /// Forces all text fields to be redrawn on the next render without a full
+    /// screen clear, recovering from silent draw failures without visual glitches.
+    /// The gauge needle is left untouched (status_pm25 preserved).
+    pub fn reset_dynamic(&mut self) {
+        self.temp.clear();
+        self.hum.clear();
+        self.pressure.clear();
+        self.status_text.clear();
+        self.pm25.clear();
+        self.pm1.clear();
+        self.pm10.clear();
+        self.pm03.clear();
+        self.pm05.clear();
+    }
 }
 
 pub fn clear_tft<D>(display: &mut D)

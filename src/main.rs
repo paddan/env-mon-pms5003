@@ -44,6 +44,8 @@ esp_bootloader_esp_idf::esp_app_desc!();
 // ===== Timing =====
 const BME_MEASURE_INTERVAL: Duration = Duration::from_secs(5);
 const DISPLAY_REFRESH_INTERVAL: Duration = Duration::from_millis(250);
+const DISPLAY_FORCE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+const PMS_STALE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[main]
 fn main() -> ! {
@@ -179,6 +181,8 @@ fn main() -> ! {
     let mut pm_24h_avg = Pm24hRollingAverage::new();
     let mut last_bme_measure = Instant::now() - BME_MEASURE_INTERVAL;
     let mut last_display_refresh = Instant::now() - DISPLAY_REFRESH_INTERVAL;
+    let mut last_full_refresh = Instant::now();
+    let mut last_pms_frame: Option<Instant> = None;
     let mut display_dirty = true;
 
     // ===== Main loop =====
@@ -202,6 +206,7 @@ fn main() -> ! {
                         Instant::now(),
                     );
                     latest_pms = Some(reading);
+                    last_pms_frame = Some(Instant::now());
                     let aqi_pm = aqi_pm25_equiv(avg.pm2_5, avg.pm10);
                     latest_aqi_pm = Some(aqi_pm);
                     display_dirty = true;
@@ -268,6 +273,24 @@ fn main() -> ! {
                     }
                 }
             }
+        }
+
+        // Clear stale PMS data if sensor has been silent for too long
+        if let Some(t) = last_pms_frame {
+            if t.elapsed() >= PMS_STALE_TIMEOUT {
+                latest_pms = None;
+                latest_aqi_pm = None;
+                last_pms_frame = None;
+                display_dirty = true;
+                log::warn!("PMS5003 silent for 30s — clearing stale readings");
+            }
+        }
+
+        // Periodic forced full display refresh — recovers from SPI corruption or missed draws
+        if last_full_refresh.elapsed() >= DISPLAY_FORCE_REFRESH_INTERVAL {
+            display_cache = DisplayCache::new();
+            last_full_refresh = Instant::now();
+            display_dirty = true;
         }
 
         // Refresh display
